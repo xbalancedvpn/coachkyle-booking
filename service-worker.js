@@ -1,0 +1,7 @@
+const CACHE_NAME="coach-booking-template-v130-final";
+const STATIC_ASSETS=["./","./index.html","./admin.html","./site.webmanifest","./brand-placeholder.svg","./coach-placeholder.svg"];
+self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(STATIC_ASSETS)).catch(()=>{}));self.skipWaiting();});
+self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE_NAME).map(k=>caches.delete(k)))));self.clients.claim();});
+async function networkFirst(req){try{const r=await fetch(req);if(r&&r.ok){const copy=r.clone();caches.open(CACHE_NAME).then(c=>c.put(req,copy));}return r;}catch(err){const cached=await caches.match(req);if(cached)return cached;throw err;}}
+async function cacheFirst(req){const cached=await caches.match(req);if(cached)return cached;const r=await fetch(req);if(r&&r.ok){const copy=r.clone();caches.open(CACHE_NAME).then(c=>c.put(req,copy));}return r;}
+self.addEventListener("fetch",e=>{const req=e.request;if(req.method!=="GET")return;const u=new URL(req.url);if(u.hostname.includes("supabase.co")||u.origin!==self.location.origin)return;if(req.mode==="navigate"){e.respondWith(networkFirst(req).catch(()=>caches.match("./index.html")));return;}const code=/\.(js|css|html)$/i.test(u.pathname)||/(config|runtime|admin|script|v17)/i.test(u.pathname);e.respondWith(code?networkFirst(req):cacheFirst(req));});
