@@ -6,6 +6,7 @@ let current={client:null,assessments:[],blob:null};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const avg=a=>{const xs=skills.map(([k])=>Number(a?.[k])).filter(n=>n>=1&&n<=5);return xs.length?xs.reduce((x,y)=>x+y,0)/xs.length:0};
 const label=n=>n>=4.5?'Excellent':n>=3.8?'Strong':n>=3?'Developing':n>0?'Building':'Not rated';
+function toast(msg){const t=$('#toast');if(!t)return alert(msg);t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3200)}
 function trend(latest,previous){if(!previous)return {text:'Baseline',cls:'trend-flat',delta:0};const d=avg(latest)-avg(previous);return Math.abs(d)<.05?{text:'Stable',cls:'trend-flat',delta:d}:d>0?{text:`+${d.toFixed(1)} improved`,cls:'trend-up',delta:d}:{text:`${d.toFixed(1)} change`,cls:'trend-down',delta:d}}
 async function resolveClient(){const name=$('#clientName')?.textContent?.trim();if(!name||name==='Client')return null;const {data,error}=await db.from('clients').select('*').eq('full_name',name).eq('is_active',true).limit(1);if(error||!data?.length)return null;return data[0]}
 async function fetchAssessments(id){const {data,error}=await db.from('progress_assessments').select('*').eq('client_id',id).order('assessment_date',{ascending:false}).order('created_at',{ascending:false}).limit(30);if(error)throw error;return data||[]}
@@ -19,10 +20,24 @@ let y=500;ctx.font='900 20px Arial';for(const [k,l] of skills){const v=Number(la
 const rated=skills.map(([k,l])=>({l,v:Number(latest[k]||0)})).filter(x=>x.v>0);const best=[...rated].sort((a,b)=>b.v-a.v)[0],focus=[...rated].sort((a,b)=>a.v-b.v)[0];y=1140;rounded(ctx,72,y,936,118,24);ctx.fillStyle='#101010';ctx.fill();ctx.fillStyle='#888';ctx.font='700 16px Arial';ctx.fillText('STRONGEST',102,y+34);ctx.fillText('NEXT FOCUS',410,y+34);ctx.fillText('ASSESSMENT',715,y+34);ctx.fillStyle='#fff';ctx.font='900 22px Arial';ctx.fillText(best?.l||'Not rated',102,y+72);ctx.fillText(focus?.l||'Not rated',410,y+72);ctx.fillText(String(latest.assessment_type||'session').toUpperCase(),715,y+72);ctx.fillStyle='#5d5d5d';ctx.font='700 15px Arial';ctx.fillText('Progress is based on Coach Kyle skill assessments. Contact and payment details are never shown.',72,1310);return canvas}
 async function buildProgressCard(){const btn=$('#shareProgressBtn');if(!btn)return;const old=btn.textContent;btn.disabled=true;btn.textContent='Preparing…';try{const client=await resolveClient();if(!client){alert('Client profile could not be found.');return}const assessments=await fetchAssessments(client.id);if(!assessments.length){alert('Add a progress assessment first before creating a progress card.');return}current.client=client;current.assessments=assessments;const canvas=drawCard(client,assessments);current.blob=await new Promise(r=>canvas.toBlob(r,'image/png',1));$('#progressCardDialog').showModal()}catch(e){console.error(e);alert(e.message||'Could not create the progress card.')}finally{btn.disabled=false;btn.textContent=old}}
 function fileName(){return `coach-kyle-${(current.client?.full_name||'player').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}-progress.png`}
-async function saveBlob(blob,name){if(!blob)return false;const file=new File([blob],name,{type:'image/png'});if(navigator.canShare?.({files:[file]})){try{await navigator.share({files:[file],title:'Save Coach Kyle Progress Card'});return true}catch(e){if(e.name==='AbortError')return false}}
-try{const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.style.display='none';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},3000);return true}catch(e){console.warn(e);return false}}
+async function directSave(blob,name){if(!blob)return false;
+  try{
+    if(window.showSaveFilePicker){
+      const handle=await window.showSaveFilePicker({suggestedName:name,types:[{description:'PNG image',accept:{'image/png':['.png']}}]});
+      const writable=await handle.createWritable();await writable.write(blob);await writable.close();toast('Progress card saved.');return true;
+    }
+  }catch(e){if(e?.name==='AbortError')return false;console.warn(e)}
+  try{
+    const url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download=name;a.rel='noopener';a.style.display='none';document.body.appendChild(a);a.click();a.remove();
+    toast('PNG sent to Downloads.');
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+    return true;
+  }catch(e){console.warn(e);return false}
+}
+async function openSaveFallback(blob){try{const url=URL.createObjectURL(blob);const w=window.open(url,'_blank');if(w){toast('Image opened. Long-press it, then choose Download/Save image.');setTimeout(()=>URL.revokeObjectURL(url),60000);return true}}catch(e){console.warn(e)}return false}
 $('#shareProgressBtn')?.addEventListener('click',buildProgressCard);$('#closeProgressCard')?.addEventListener('click',()=>$('#progressCardDialog').close());$('#closeProgressCardBottom')?.addEventListener('click',()=>$('#progressCardDialog').close());
-$('#downloadProgressCard')?.addEventListener('click',async()=>{if(!current.blob)return alert('Progress card is not ready yet.');const ok=await saveBlob(current.blob,fileName());if(!ok)alert('Your browser did not complete the save. Use Share and choose Files, Photos, or Messenger.')});
-$('#shareProgressCardNative')?.addEventListener('click',async()=>{if(!current.blob)return;const file=new File([current.blob],fileName(),{type:'image/png'});if(navigator.canShare?.({files:[file]})){try{await navigator.share({title:`${current.client.full_name} - Coach Kyle Progress`,text:'Player progress update from Coach Kyle.',files:[file]});return}catch(e){if(e.name==='AbortError')return}}await saveBlob(current.blob,fileName())});
+$('#downloadProgressCard')?.addEventListener('click',async()=>{if(!current.blob)return alert('Progress card is not ready yet.');const ok=await directSave(current.blob,fileName());if(!ok)await openSaveFallback(current.blob)});
+$('#shareProgressCardNative')?.addEventListener('click',async()=>{if(!current.blob)return;const file=new File([current.blob],fileName(),{type:'image/png'});if(navigator.canShare?.({files:[file]})){try{await navigator.share({title:`${current.client.full_name} - Coach Kyle Progress`,text:'Player progress update from Coach Kyle.',files:[file]});return}catch(e){if(e.name==='AbortError')return}}await openSaveFallback(current.blob)});
 const nameNode=$('#clientName');if(nameNode){new MutationObserver(()=>setTimeout(refreshInsight,250)).observe(nameNode,{childList:true,subtree:true,characterData:true})}document.addEventListener('click',e=>{if(e.target.closest?.('[data-client]'))setTimeout(refreshInsight,500)});
 })();
