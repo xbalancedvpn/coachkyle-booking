@@ -6,114 +6,20 @@
   <meta name="theme-color" content="#070707">
   <title>Coach Kyle | Pickleball Coaching</title>
   <meta name="description" content="Pickleball coaching with Coach Kyle in Santiago City. Solo and small-group sessions, live availability and booking requests.">
-  <link rel="stylesheet" href="coach-kyle-v2.css?v=4">
+  <link rel="stylesheet" href="coach-kyle-v2.css?v=5">
   <link rel="manifest" href="site.webmanifest">
   <link rel="icon" type="image/webp" href="assets/coach-kyle-favicon.webp">
 </head>
 <body>
 <header class="site-header">
   <a class="site-brand" href="#home" aria-label="Coach Kyle home"><img src="assets/coach-kyle-wordmark.webp" alt="Coach Kyle"></a>
-  <nav class="nav" id="nav">
-    <a href="#home">Home</a>
-    <a href="#coach">Coach</a>
-    <a href="#rates">Rates</a>
-    <a href="#booking">Schedule</a>
-    <a href="#contact">Contact</a>
-  </nav>
-  <div class="header-actions">
-    <a class="icon-btn" href="admin.html" aria-label="Admin login" title="Admin login">🔒</a>
-    <a class="book-small" href="#booking">Book Now</a>
-    <button class="menu-btn" id="menuBtn" type="button" aria-label="Menu">☰</button>
-  </div>
+  <nav class="nav" id="nav"><a href="#home">Home</a><a href="#coach">Coach</a><a href="#rates">Rates</a><a href="#booking">Schedule</a><a href="#contact">Contact</a></nav>
+  <div class="header-actions"><a class="icon-btn" href="admin.html" aria-label="Admin login" title="Admin login">🔒</a><a class="book-small" href="#booking">Book Now</a><button class="menu-btn" id="menuBtn" type="button" aria-label="Menu">☰</button></div>
 </header>
-
 <main>
-  <section class="hero" id="home">
-    <div class="hero-visual">
-      <img class="hero-photo" src="assets/coach-kyle-photo-2.webp" alt="Coach Kyle pickleball coaching">
-      <img class="hero-badge" src="assets/coach-kyle-main-logo.webp" alt="Coach Kyle Play Learn Improve">
-    </div>
-    <div class="hero-content">
-      <img class="hero-wordmark" src="assets/coach-kyle-wordmark.webp" alt="Coach Kyle">
-      <span class="eyebrow">Pickleball Coaching • Santiago City</span>
-      <h1>Elevate your game.<br><span>Train with purpose.</span></h1>
-      <p>Focused pickleball coaching for kids, beginners, novice and intermediate players. Build cleaner fundamentals, better movement, stronger consistency and smarter point construction.</p>
-      <div class="hero-buttons">
-        <button class="btn primary" id="scrollBooking" type="button">Book a Session</button>
-        <button class="btn secondary" id="scrollRates" type="button">View Rates</button>
-      </div>
-      <div class="live-pill"><span class="live-dot"></span><span>Live schedule connected</span></div>
-    </div>
-  </section>
-
-  <section class="section light" id="coach">
-    <div class="coach-grid">
-      <div class="coach-photo"><img src="assets/coach-kyle-photo-1.webp" alt="Kyle Paulo Alvarez Guzman"></div>
-      <div class="coach-copy">
-        <span class="eyebrow">Meet Your Coach</span>
-        <h2>Kyle Paulo Alvarez Guzman</h2>
-        <p>Coach Kyle provides practical, player-focused pickleball coaching in Santiago City. Sessions are designed around your current level and the parts of your game you want to improve most.</p>
-        <div class="info-grid">
-          <div class="info-card"><strong>📍 Santiago City</strong><small>Coaching location</small></div>
-          <div class="info-card"><strong>🕗 8 AM – 10 PM</strong><small>Monday–Sunday</small></div>
-          <div class="info-card"><strong>🏓 1–6 Players</strong><small>Solo or small group</small></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="section dark" id="rates">
-    <div class="section-head">
-      <span class="eyebrow">Coaching Rates</span>
-      <h2>Train solo or bring your crew.</h2>
-      <p>Hourly coaching rates. Court fee is separate from the coaching fee.</p>
-    </div>
-    <div class="rates-grid">
-      <article class="rate-card"><strong>1-on-1</strong><div class="price">₱500</div><small>total / hour</small></article>
-      <article class="rate-card"><strong>2 Players</strong><div class="price">₱700</div><small>total / hour</small></article>
-      <article class="rate-card"><strong>3 Players</strong><div class="price">₱900</div><small>total / hour</small></article>
-      <article class="rate-card"><strong>4 Players</strong><div class="price">₱1,100</div><small>total / hour</small></article>
-      <article class="rate-card"><strong>5 Players</strong><div class="price">₱1,300</div><small>total / hour</small></article>
-      <article class="rate-card"><strong>6 Players</strong><div class="price">₱1,500</div><small>total / hour</small></article>
-    </div>
-    <div class="court-note"><strong>Court fee is not included.</strong> Venue and court fee are confirmed separately with Coach Kyle.</div>
-  </section>
-
-  <section class="section light" id="booking">
-    <div class="section-head">
-      <span class="eyebrow">Live Schedule</span>
-      <h2>Choose a date and request your session.</h2>
-      <p>Select your preferred date and time. Available slots are pulled from the Coach Kyle schedule. Final booking is subject to confirmation.</p>
-    </div>
-    <div class="booking-shell">
-      <div class="calendar-card">
-        <div class="field"><label for="date">Date</label><input id="date" type="date"></div>
-        <div id="availabilityStatus" class="status">Checking live availability…</div>
-        <div class="field"><label>Available time</label><div id="slots" class="slot-grid"></div></div>
-      </div>
-      <div class="request-card">
-        <div class="field"><label for="name">Your name</label><input id="name" type="text" maxlength="120" autocomplete="name" placeholder="Full name"></div>
-        <div class="field"><label for="contact">Contact</label><input id="contact" type="text" maxlength="120" autocomplete="tel" placeholder="Messenger or mobile number"></div>
-        <div class="field"><label for="players">Number of players</label><select id="players"><option value="1">1 player — ₱500/hr</option><option value="2">2 players — ₱700/hr</option><option value="3">3 players — ₱900/hr</option><option value="4">4 players — ₱1,100/hr</option><option value="5">5 players — ₱1,300/hr</option><option value="6">6 players — ₱1,500/hr</option></select></div>
-        <div class="field"><label for="goal">Main goal</label><select id="goal"><option value="General coaching">General coaching</option><option value="Beginner fundamentals">Beginner fundamentals</option><option value="Serve and return">Serve and return</option><option value="Footwork">Footwork</option><option value="Dinking and kitchen play">Dinking and kitchen play</option><option value="Consistency">Consistency</option><option value="Game strategy">Game strategy</option><option value="Tournament preparation">Tournament preparation</option></select></div>
-        <div id="requestSummary" class="request-summary"><strong>Current request</strong></div>
-        <div class="request-actions">
-          <button id="sendRequest" class="btn primary" type="button">Send Request</button>
-          <button id="copyMessenger" class="btn secondary" type="button">Copy & Open Messenger</button>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="contact-bar" id="contact">
-    <div><span class="eyebrow" style="color:#111">Coach Kyle</span><h3>Ready to work on your game?</h3></div>
-    <div class="contact-links"><a href="https://www.facebook.com/kylepaulo13" target="_blank" rel="noopener">Message on Facebook</a><a href="tel:09637600148">0963 760 0148</a></div>
-  </section>
-</main>
-
-<footer class="footer"><img src="assets/coach-kyle-wordmark.webp" alt="Coach Kyle"><span>Pickleball Coaching • Santiago City</span></footer>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="coach-kyle-v2.js?v=4"></script>
-</body>
-</html>
+<section class="hero" id="home"><div class="hero-visual"><img class="hero-photo" src="assets/coach-kyle-photo-2.webp" alt="Coach Kyle pickleball coaching"><img class="hero-badge" src="assets/coach-kyle-main-logo.webp" alt="Coach Kyle Play Learn Improve"></div><div class="hero-content"><img class="hero-wordmark" src="assets/coach-kyle-wordmark.webp" alt="Coach Kyle"><span class="eyebrow">Pickleball Coaching • Santiago City</span><h1>Elevate your game.<br><span>Train with purpose.</span></h1><p>Focused pickleball coaching for kids, beginners, novice and intermediate players. Build cleaner fundamentals, better movement, stronger consistency and smarter point construction.</p><div class="hero-buttons"><button class="btn primary" id="scrollBooking" type="button">Book a Session</button><button class="btn secondary" id="scrollRates" type="button">View Rates</button></div><div class="live-pill"><span class="live-dot"></span><span>Live schedule connected</span></div></div></section>
+<section class="section light" id="coach"><div class="coach-grid"><div class="coach-photo"><img src="assets/coach-kyle-photo-1.webp" alt="Kyle Paulo Alvarez Guzman"></div><div class="coach-copy"><span class="eyebrow">Meet Your Coach</span><h2>Kyle Paulo Alvarez Guzman</h2><p>Coach Kyle provides practical, player-focused pickleball coaching in Santiago City. Sessions are designed around your current level and the parts of your game you want to improve most.</p><div class="info-grid"><div class="info-card"><strong>📍 Santiago City</strong><small>Coaching location</small></div><div class="info-card"><strong>🕗 8 AM – 10 PM</strong><small>Monday–Sunday</small></div><div class="info-card"><strong>🏓 1–6 Players</strong><small>Solo or small group</small></div></div></div></div></section>
+<section class="section dark" id="rates"><div class="section-head"><span class="eyebrow">Coaching Rates</span><h2>Train solo or bring your crew.</h2><p>Hourly coaching rates. Court fee is separate from the coaching fee.</p></div><div class="rates-grid"><article class="rate-card"><strong>1-on-1</strong><div class="price">₱500</div><small>total / hour</small></article><article class="rate-card"><strong>2 Players</strong><div class="price">₱700</div><small>total / hour</small></article><article class="rate-card"><strong>3 Players</strong><div class="price">₱900</div><small>total / hour</small></article><article class="rate-card"><strong>4 Players</strong><div class="price">₱1,100</div><small>total / hour</small></article><article class="rate-card"><strong>5 Players</strong><div class="price">₱1,300</div><small>total / hour</small></article><article class="rate-card"><strong>6 Players</strong><div class="price">₱1,500</div><small>total / hour</small></article></div><div class="court-note"><strong>Court fee is not included.</strong> Venue and court fee are confirmed separately with Coach Kyle.</div></section>
+<section class="section light" id="booking"><div class="section-head"><span class="eyebrow">Live Schedule</span><h2>Choose a date and request your session.</h2><p>Select your preferred date and time. Available slots are pulled from the Coach Kyle schedule. Final booking is subject to confirmation.</p></div><div class="booking-shell"><div class="calendar-card"><div class="field"><label for="date">Date</label><input id="date" type="date"></div><div id="availabilityStatus" class="status">Checking live availability…</div><div class="field"><label>Available time</label><div id="slots" class="slot-grid"></div></div></div><div class="request-card"><div class="field"><label for="name">Primary player full name</label><input id="name" type="text" maxlength="120" autocomplete="name" placeholder="First name and last name"></div><div class="field"><label for="contact">Contact</label><input id="contact" type="text" maxlength="120" autocomplete="tel" placeholder="Messenger or mobile number"></div><div class="field"><label for="players">Number of players</label><select id="players"><option value="1">1 player — ₱500/hr</option><option value="2">2 players — ₱700/hr</option><option value="3">3 players — ₱900/hr</option><option value="4">4 players — ₱1,100/hr</option><option value="5">5 players — ₱1,300/hr</option><option value="6">6 players — ₱1,500/hr</option></select></div><div id="extraPlayers"></div><div class="field"><label for="goal">Main goal</label><select id="goal"><option value="General coaching">General coaching</option><option value="Beginner fundamentals">Beginner fundamentals</option><option value="Serve and return">Serve and return</option><option value="Footwork">Footwork</option><option value="Dinking and kitchen play">Dinking and kitchen play</option><option value="Consistency">Consistency</option><option value="Game strategy">Game strategy</option><option value="Tournament preparation">Tournament preparation</option></select></div><div id="requestSummary" class="request-summary"><strong>Current request</strong></div><div class="request-actions"><button id="sendRequest" class="btn primary" type="button">Send Request</button><button id="copyMessenger" class="btn secondary" type="button">Copy & Open Messenger</button></div></div></div></section>
+<section class="contact-bar" id="contact"><div><span class="eyebrow" style="color:#111">Coach Kyle</span><h3>Ready to work on your game?</h3></div><div class="contact-links"><a href="https://www.facebook.com/kylepaulo13" target="_blank" rel="noopener">Message on Facebook</a><a href="tel:09637600148">0963 760 0148</a></div></section>
+</main><footer class="footer"><img src="assets/coach-kyle-wordmark.webp" alt="Coach Kyle"><span>Pickleball Coaching • Santiago City</span></footer><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="coach-kyle-v2.js?v=5"></script></body></html>
