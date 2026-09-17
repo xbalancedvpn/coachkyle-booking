@@ -5,7 +5,7 @@
     facebook:'https://www.facebook.com/kylepaulo13',
     phone:'09637600148',
     startHour:8,endHour:22,
-    rates:{1:500,2:700,3:900,4:1100,5:1500}
+    rates:{1:500,2:700,3:900,4:1100,5:1300,6:1500}
   };
   const $=s=>document.querySelector(s); const $$=s=>[...document.querySelectorAll(s)];
   const pad=n=>String(n).padStart(2,'0'); const keyDate=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
