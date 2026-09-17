@@ -7,6 +7,7 @@
   <title>Coach Kyle Admin</title>
   <link rel="icon" type="image/webp" href="assets/coach-kyle-favicon.webp">
   <link rel="stylesheet" href="admin-kyle.css?v=3">
+  <link rel="stylesheet" href="progress-card.css?v=1">
 </head>
 <body>
 <div id="toast" class="toast"></div>
@@ -110,7 +111,7 @@
     <h2 id="clientName">Client</h2>
     <div id="clientMeta" class="confirm-meta"></div>
     <div id="clientStats" class="client-stats"></div>
-    <div class="client-detail-actions"><button id="addProgressBtn" class="primary" type="button">+ Progress Assessment</button></div>
+    <div class="client-detail-actions"><button id="addProgressBtn" class="primary" type="button">+ Progress Assessment</button><button id="shareProgressBtn" class="share-progress-btn" type="button">Share Progress Card</button></div>
     <div class="client-detail-grid">
       <section><h3>Session History</h3><div id="clientSessions" class="timeline"><div class="empty">Loading…</div></div></section>
       <section><h3>Player Progress</h3><div id="clientProgress" class="progress-panel"><div class="empty">No assessment yet.</div></div></section>
@@ -132,6 +133,16 @@
   </form>
 </dialog>
 
+<dialog id="progressCardDialog" class="progress-card-dialog">
+  <div class="dialog-card progress-card-wrap">
+    <button class="x" id="closeProgressCard" type="button">×</button>
+    <span class="eyebrow">SHAREABLE PROGRESS</span><h2>Player Progress Card</h2>
+    <canvas id="progressCardCanvas" class="progress-card-preview" width="1080" height="1350"></canvas>
+    <div class="progress-card-actions"><button id="downloadProgressCard" class="save" type="button">Save PNG</button><button id="shareProgressCardNative" class="share" type="button">Share</button><button id="closeProgressCardBottom" class="close" type="button">Close</button></div>
+  </div>
+</dialog>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="admin-kyle.js?v=3"></script>
+<script src="progress-card.js?v=1"></script>
 </body></html>
