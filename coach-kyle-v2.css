@@ -19,3 +19,16 @@
 .slot{min-height:58px;line-height:1.15}
 .slot .slot-time{display:block;white-space:nowrap;font-size:14px}
 .slot small{display:block;margin-top:5px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.07em}
+
+/* v10 start-end time picker */
+.time-point .slot-time,.end-time-slot .slot-time{font-size:16px}
+.time-point small.available{color:#6aa878}
+.time-point:not(.booked):not(.blocked) small{color:#6f9f78}
+.end-slot-grid{min-height:58px}
+.end-time-hint{grid-column:1/-1;padding:16px;border:1px dashed #d1d1d1;border-radius:10px;color:#777;background:#fafafa;font-size:12px;text-align:center}
+.slot.start-selected{outline:2px solid #111;outline-offset:2px}
+.slot.range-selected{background:#fff7c8;border-color:#d6b800}
+.end-time-slot.selected{background:#111;color:#ffd600;border-color:#111}
+@media(max-width:760px){
+  .time-point .slot-time,.end-time-slot .slot-time{font-size:15px}
+}
