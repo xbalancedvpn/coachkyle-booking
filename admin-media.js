@@ -1,0 +1,38 @@
+(() => {
+const URL='https://pnomsapqqkgcvkzknujc.supabase.co',KEY='sb_publishable_EokwTiLlK_qy2Upc_0j3hw_noRX84_q',BUCKET='coach-kyle-gallery';
+const db=window.supabase.createClient(URL,KEY),$=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const toast=msg=>{const t=$('#toast');if(!t)return alert(msg);t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800)};
+const niceDate=s=>{try{return new Date(s+'T12:00:00').toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}catch{return s}};
+async function loadGalleryAdmin(){
+ const root=$('#galleryAdminList');if(!root)return;
+ const {data,error}=await db.from('gallery_images').select('*').order('sort_order').order('created_at');if(error){root.innerHTML=`<div class="empty">${esc(error.message)}</div>`;return}
+ root.innerHTML=data?.length?data.map((x,i)=>{const {data:u}=db.storage.from(BUCKET).getPublicUrl(x.storage_path);return `<div class="media-row"><img src="${esc(u.publicUrl)}" alt=""><div><h4>${esc(x.caption||'No caption')}</h4><p>${x.is_visible?'Visible on public site':'Hidden'} • Position ${i+1}</p><div class="media-actions"><button data-up="${x.id}" ${i===0?'disabled':''}>↑ Up</button><button data-down="${x.id}" ${i===data.length-1?'disabled':''}>↓ Down</button><button data-toggle-gallery="${x.id}" data-visible="${x.is_visible}">${x.is_visible?'Hide':'Show'}</button><button class="danger-mini" data-delete-gallery="${x.id}" data-path="${esc(x.storage_path)}">Delete</button></div></div></div>`}).join(''):'<div class="empty">No gallery images yet.</div>';
+ root.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>moveGallery(data,b.dataset.up,-1));
+ root.querySelectorAll('[data-down]').forEach(b=>b.onclick=()=>moveGallery(data,b.dataset.down,1));
+ root.querySelectorAll('[data-toggle-gallery]').forEach(b=>b.onclick=()=>toggleGallery(b.dataset.toggleGallery,b.dataset.visible!=='true'));
+ root.querySelectorAll('[data-delete-gallery]').forEach(b=>b.onclick=()=>deleteGallery(b.dataset.deleteGallery,b.dataset.path));
+}
+async function moveGallery(rows,id,dir){const i=rows.findIndex(x=>x.id===id),j=i+dir;if(i<0||j<0||j>=rows.length)return;const a=rows[i],b=rows[j];const base=rows.map((x,n)=>({id:x.id,sort:n+1}));const ai=base.find(x=>x.id===a.id),bi=base.find(x=>x.id===b.id),tmp=ai.sort;ai.sort=bi.sort;bi.sort=tmp;for(const x of base){const {error}=await db.from('gallery_images').update({sort_order:x.sort}).eq('id',x.id);if(error)return toast(error.message)}toast('Gallery order updated.');loadGalleryAdmin()}
+async function toggleGallery(id,v){const {error}=await db.from('gallery_images').update({is_visible:v}).eq('id',id);if(error)return toast(error.message);toast(v?'Image shown.':'Image hidden.');loadGalleryAdmin()}
+async function deleteGallery(id,path){if(!confirm('Delete this gallery image?'))return;const {error:se}=await db.storage.from(BUCKET).remove([path]);if(se)return toast(se.message);const {error}=await db.from('gallery_images').delete().eq('id',id);if(error)return toast(error.message);toast('Gallery image deleted.');loadGalleryAdmin()}
+async function uploadGallery(e){e.preventDefault();const f=$('#galleryFile').files?.[0],caption=$('#galleryCaption').value.trim();if(!f)return toast('Choose an image first.');if(f.size>8*1024*1024)return toast('Image must be 8 MB or smaller.');const btn=$('#galleryUploadBtn'),old=btn.textContent;btn.disabled=true;btn.textContent='Uploading…';try{const ext=(f.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'');const path=`${Date.now()}-${crypto.randomUUID()}.${ext}`;const {error:ue}=await db.storage.from(BUCKET).upload(path,f,{cacheControl:'3600',upsert:false});if(ue)throw ue;const {data:max}=await db.from('gallery_images').select('sort_order').order('sort_order',{ascending:false}).limit(1);const {error:ie}=await db.from('gallery_images').insert({storage_path:path,caption:caption||null,sort_order:Number(max?.[0]?.sort_order||0)+1,is_visible:true});if(ie){await db.storage.from(BUCKET).remove([path]);throw ie}$('#galleryUploadForm').reset();toast('Image added to homepage carousel.');loadGalleryAdmin()}catch(err){toast(err.message||'Upload failed.')}finally{btn.disabled=false;btn.textContent=old}}
+async function loadTestimonialsAdmin(){
+ const pending=$('#testimonialPending'),published=$('#testimonialPublished');if(!pending||!published)return;
+ const {data,error}=await db.from('testimonials').select('*').order('created_at',{ascending:false}).limit(100);if(error){pending.innerHTML=`<div class="empty">${esc(error.message)}</div>`;return}
+ const card=t=>`<article class="testimonial-admin-card"><div class="testimonial-admin-head"><div><strong>${t.is_anonymous?'Anonymous':esc(t.display_name)}</strong><div class="testimonial-admin-meta">${'★'.repeat(Number(t.rating||0))} • ${niceDate(t.submitted_at)}</div></div><span class="admin-badge ${esc(t.review_status)}">${esc(t.review_status)}</span></div><blockquote>“${esc(t.quote)}”</blockquote><div class="media-actions">${t.review_status==='pending'? `<button class="primary-mini" data-approve="${t.id}">Approve</button><button data-reject="${t.id}">Reject</button>`:''}${t.review_status==='approved'? `<button data-publish="${t.id}" data-state="${t.is_published}">${t.is_published?'Hide':'Publish'}</button>`:''}<button class="danger-mini" data-delete-testimonial="${t.id}">Delete</button></div></article>`;
+ const p=(data||[]).filter(x=>x.review_status==='pending'),a=(data||[]).filter(x=>x.review_status!=='pending');
+ pending.innerHTML=p.length?p.map(card).join(''):'<div class="empty">No testimonials waiting for approval.</div>';
+ published.innerHTML=a.length?a.map(card).join(''):'<div class="empty">No reviewed testimonials yet.</div>';
+ document.querySelectorAll('[data-approve]').forEach(b=>b.onclick=()=>reviewTestimonial(b.dataset.approve,'approved',true));
+ document.querySelectorAll('[data-reject]').forEach(b=>b.onclick=()=>reviewTestimonial(b.dataset.reject,'rejected',false));
+ document.querySelectorAll('[data-publish]').forEach(b=>b.onclick=()=>publishTestimonial(b.dataset.publish,b.dataset.state!=='true'));
+ document.querySelectorAll('[data-delete-testimonial]').forEach(b=>b.onclick=()=>deleteTestimonial(b.dataset.deleteTestimonial));
+}
+async function reviewTestimonial(id,status,published){const {error}=await db.from('testimonials').update({review_status:status,is_published:published}).eq('id',id);if(error)return toast(error.message);toast(status==='approved'?'Testimonial approved and published.':'Testimonial rejected.');loadTestimonialsAdmin()}
+async function publishTestimonial(id,v){const {error}=await db.from('testimonials').update({is_published:v}).eq('id',id);if(error)return toast(error.message);toast(v?'Testimonial published.':'Testimonial hidden.');loadTestimonialsAdmin()}
+async function deleteTestimonial(id){if(!confirm('Delete this testimonial?'))return;const {error}=await db.from('testimonials').delete().eq('id',id);if(error)return toast(error.message);toast('Testimonial deleted.');loadTestimonialsAdmin()}
+async function refresh(){const {data:{session}}=await db.auth.getSession();if(!session)return;loadGalleryAdmin();loadTestimonialsAdmin()}
+function init(){ $('#galleryUploadForm')?.addEventListener('submit',uploadGallery); $('#refreshMediaBtn')?.addEventListener('click',refresh); db.auth.onAuthStateChange((_,s)=>{if(s)setTimeout(refresh,150)}); refresh()}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+})();
