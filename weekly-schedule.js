@@ -8,7 +8,8 @@ const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const parseDate=s=>new Date(`${s}T12:00:00`);
 const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
 const mondayOf=d=>{const x=new Date(d);x.setHours(12,0,0,0);x.setDate(x.getDate()-((x.getDay()+6)%7));return x};
-const hourName=h=>`${h%12||12}:00 ${h<12?'AM':'PM'}`;\nconst hourRange=h=>`${hourName(h)} – ${hourName(h+1)}`;
+const hourName=h=>`${h%12||12}:00 ${h<12?'AM':'PM'}`;
+const hourRange=h=>`${hourName(h)} – ${hourName(h+1)}`;
 const dateLabel=d=>d.toLocaleDateString('en-PH',{month:'short',day:'numeric'});
 const rangeLabel=(a,b)=>`${a.toLocaleDateString('en-PH',{month:'long',day:'numeric'})} – ${b.toLocaleDateString('en-PH',{month:'long',day:'numeric',year:'numeric'})}`;
 function toast(msg){const t=$('#toast');if(!t)return alert(msg);t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3200)}
