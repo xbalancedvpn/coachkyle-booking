@@ -4,3 +4,12 @@
 
 /* Visually remove the baked black square around the main mark on dark surfaces. */
 .hero-main-logo,.hero-badge{mix-blend-mode:screen;background:transparent!important}
+
+/* v8 navigation + hero cleanup */
+.site-brand{display:flex;align-items:center;justify-content:center;min-width:48px}
+.site-brand .nav-favicon{width:48px;height:48px;max-width:none;object-fit:contain;filter:drop-shadow(0 4px 10px rgba(0,0,0,.45))}
+.hero-badge{display:none!important}
+@media(max-width:760px){
+  .site-brand .nav-favicon{width:42px;height:42px}
+  .hero-content{padding-top:235px}
+}
