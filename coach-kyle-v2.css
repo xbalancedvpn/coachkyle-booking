@@ -13,3 +13,9 @@
   .site-brand .nav-favicon{width:42px;height:42px}
   .hero-content{padding-top:235px}
 }
+
+/* v9 compact 2-column time slots */
+.slot-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.slot{min-height:58px;line-height:1.15}
+.slot .slot-time{display:block;white-space:nowrap;font-size:14px}
+.slot small{display:block;margin-top:5px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.07em}
