@@ -171,3 +171,11 @@
   #scheduleSlots{grid-template-columns:repeat(2,minmax(0,1fr))}
   #scheduleSlots .slot{font-size:14px}
 }
+
+/* v8 manual client controls */
+.client-panel-controls{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.client-panel-controls .primary{white-space:nowrap}
+@media(max-width:620px){
+  .client-panel-controls{width:100%;display:grid;grid-template-columns:1fr}
+  .client-panel-controls .search-input{max-width:none}
+}
