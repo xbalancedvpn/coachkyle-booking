@@ -10,7 +10,7 @@ function toast(msg){const t=$('#toast');if(!t)return alert(msg);t.textContent=ms
 function resetSkillButtons(){document.querySelectorAll('#postSkillFields [data-score]').forEach(b=>b.classList.remove('active'))}
 function readCurrentDraft(){if(!selectedClientId)return;const note=$('#postProgressNote').value.trim();const scores={};skills.forEach(([k])=>{const x=document.querySelector(`#postSkillFields [data-skill="${k}"].active`);if(x)scores[k]=Number(x.dataset.score)});const has=note||Object.keys(scores).length;if(has)drafts.set(selectedClientId,{client_id:selectedClientId,scores,note});else drafts.delete(selectedClientId);renderDraftStatus()}
 function loadDraft(id){selectedClientId=id;resetSkillButtons();$('#postProgressNote').value='';const d=drafts.get(id);if(d){for(const [k,v] of Object.entries(d.scores||{}))document.querySelector(`#postSkillFields [data-skill="${k}"][data-score="${v}"]`)?.classList.add('active');$('#postProgressNote').value=d.note||''}renderDraftStatus()}
-function renderDraftStatus(){const names=participants.filter(p=>drafts.has(p.client_id)).map(p=>p.full_name);const el=$('#postProgressStatus');if(!names.length){el.className='post-progress-status';el.textContent='Progress is optional. No player assessment queued yet.'}else{el.className='post-progress-status ready';el.textContent=`Queued progress: ${names.join(', ')}`}}
+function renderDraftStatus(){const names=participants.filter(p=>drafts.has(p.client_id)).map(p=>p.full_name);const el=$('#postProgressStatus');if(!names.length){el.className='post-progress-status';el.textContent='Progress is optional. No player progress added yet.'}else{el.className='post-progress-status ready';el.textContent=`Progress added: ${names.join(', ')}`}}
 function buildSkills(){const root=$('#postSkillFields');if(root.children.length)return;root.innerHTML=skills.map(([k,l])=>`<div class="post-skill-row"><span>${l}</span><div class="post-rating">${[1,2,3,4,5].map(n=>`<button type="button" data-skill="${k}" data-score="${n}">${n}</button>`).join('')}</div></div>`).join('');root.addEventListener('click',e=>{const b=e.target.closest('[data-score]');if(!b)return;const row=b.parentElement;row.querySelectorAll('[data-score]').forEach(x=>x.classList.toggle('active',x===b))})}
 async function openWorkflow(id){try{
   const [{data:b,error:be},{data:parts,error:pe},{data:pays,error:payErr}]=await Promise.all([
@@ -30,7 +30,7 @@ async function openWorkflow(id){try{
 }catch(e){toast(e.message||'Could not open session workflow.')}} 
 document.addEventListener('click',e=>{const btn=e.target.closest?.('[data-complete]');if(!btn)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();openWorkflow(btn.dataset.complete)},true);
 $('#postPlayerSelect')?.addEventListener('change',e=>{readCurrentDraft();loadDraft(e.target.value||null)});
-$('#queuePlayerProgress')?.addEventListener('click',()=>{readCurrentDraft();toast(drafts.has(selectedClientId)?'Player progress queued.':'No rating or note to queue.')});
+$('#queuePlayerProgress')?.addEventListener('click',()=>{readCurrentDraft();toast(drafts.has(selectedClientId)?'Player progress added.':'Add at least one rating or note first.')});
 $('#clearPlayerProgress')?.addEventListener('click',()=>{if(selectedClientId)drafts.delete(selectedClientId);resetSkillButtons();$('#postProgressNote').value='';renderDraftStatus()});
 $('#closePostSession')?.addEventListener('click',()=>$('#postSessionDialog').close());
 $('#cancelPostSession')?.addEventListener('click',()=>$('#postSessionDialog').close());
