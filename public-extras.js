@@ -10,10 +10,9 @@ async function loadGallery(){
  section?.classList.remove('hidden-public');
  root.innerHTML=data.map((x,i)=>{const {data:u}=db.storage.from('coach-kyle-gallery').getPublicUrl(x.storage_path);return `<article class="gallery-card" data-gallery-index="${i}"><img src="${esc(u.publicUrl)}" alt="${esc(x.caption||'Coach Kyle coaching photo')}" loading="lazy">${x.caption?`<div class="gallery-caption">${esc(x.caption)}</div>`:''}</article>`}).join('');
  dots.innerHTML=data.map((_,i)=>`<span class="${i===0?'active':''}"></span>`).join('');
- let timer=null; const cards=[...root.querySelectorAll('.gallery-card')], ds=[...dots.children];
+ const cards=[...root.querySelectorAll('.gallery-card')], ds=[...dots.children];
  const setDot=i=>ds.forEach((d,n)=>d.classList.toggle('active',n===i));
  root.addEventListener('scroll',()=>{const w=cards[0]?.offsetWidth||1,gap=18;setDot(Math.max(0,Math.min(cards.length-1,Math.round(root.scrollLeft/(w+gap)))))},{passive:true});
- if(cards.length>1){let i=0;timer=setInterval(()=>{if(document.hidden)return;i=(i+1)%cards.length;const card=cards[i],target=card.offsetLeft-(root.clientWidth-card.clientWidth)/2;root.scrollTo({left:Math.max(0,target),behavior:'smooth'});setDot(i)},5000);root.addEventListener('pointerdown',()=>{if(timer){clearInterval(timer);timer=null}},{once:true})}
 }
 async function loadTestimonials(){
  const root=$('#testimonialList'); if(!root||!db)return;
