@@ -161,3 +161,13 @@
   .rating-control{gap:5px}
   .rating-chip{min-height:44px;padding:7px 3px;font-size:16px}
 }
+
+/* v7 restore clean 2-column schedule cards */
+#scheduleSlots{grid-template-columns:repeat(2,minmax(0,1fr))}
+#scheduleSlots .slot{white-space:normal;overflow:visible;text-overflow:clip;min-height:58px;line-height:1.15}
+#scheduleSlots .slot .slot-time{display:block;white-space:nowrap;font-size:14px}
+#scheduleSlots .slot small{display:block;margin-top:5px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.07em}
+@media(max-width:620px){
+  #scheduleSlots{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #scheduleSlots .slot{font-size:14px}
+}
