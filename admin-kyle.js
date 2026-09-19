@@ -14,7 +14,7 @@ async function init(){const {data:{session}}=await db.auth.getSession();session?
 $('#loginForm').addEventListener('submit',async e=>{e.preventDefault();$('#loginError').textContent='';const {data,error}=await db.auth.signInWithPassword({email:$('#email').value.trim(),password:$('#password').value});if(error)return $('#loginError').textContent=error.message;showAdmin(data.session)});
 $('#logoutBtn').onclick=async()=>{await db.auth.signOut();showLogin()};
 $('#refreshBtn').onclick=loadAll;$('#scheduleDate').addEventListener('change',loadSchedule);$('#clientSearch').addEventListener('input',renderClientList);
-async function loadAll(){await Promise.all([loadInquiries(),loadBookings(),loadSchedule(),loadClients()])}
+async function loadAll(){await Promise.all([loadInquiries(),loadBookings(),loadPaymentFollowups(),loadSchedule(),loadClients()])}
 async function loadInquiries(){const {data,error}=await db.from('inquiries').select('*').in('status',['new','waiting','tentative']).order('created_at',{ascending:false}).limit(50);if(error)return $('#inquiries').innerHTML=`<div class="empty">${esc(error.message)}</div>`;$('#metricInquiries').textContent=data.length;$('#inquiries').innerHTML=data.length?data.map(i=>`<article class="card"><div class="card-top"><div><h3>${esc(i.client_name)}</h3><div class="meta">${esc(i.preferred_date||'No date')} • ${i.start_hour==null?'No time':`${hour(i.start_hour)}–${hour(i.end_hour)}`}<br>${i.participant_count||1} player${Number(i.participant_count||1)>1?'s':''} • ${money(i.quoted_rate)} • ${esc(i.goal_focus||'General coaching')}<br>${esc(i.contact||'No contact')}</div></div><span class="tag ${i.status==='new'?'new':''}">${esc(i.status)}</span></div><div class="card-actions"><button class="mini confirm" data-confirm="${i.id}">Confirm</button><button class="mini" data-wait="${i.id}">Mark Waiting</button><button class="mini" data-cancel="${i.id}">Cancel</button></div></article>`).join(''):'<div class="empty">No pending inquiries.</div>';data.forEach(i=>{document.querySelector(`[data-confirm="${i.id}"]`)?.addEventListener('click',()=>openConfirm(i));document.querySelector(`[data-wait="${i.id}"]`)?.addEventListener('click',()=>setInquiry(i.id,'waiting'));document.querySelector(`[data-cancel="${i.id}"]`)?.addEventListener('click',()=>setInquiry(i.id,'cancelled'))})}
 async function setInquiry(id,status){const {error}=await db.from('inquiries').update({status}).eq('id',id);if(error)return toast(error.message);toast(`Inquiry marked ${status}.`);loadInquiries()}
 function openConfirm(i){activeInquiry=i;$('#confirmTitle').textContent=i.client_name;$('#confirmMeta').innerHTML=`${esc(i.preferred_date)} • ${hour(i.start_hour)}–${hour(i.end_hour)}<br>${i.participant_count||1} player${Number(i.participant_count||1)>1?'s':''} • ${esc(i.coaching_type||'Coaching session')}<br>${esc(i.contact||'No contact')}`;$('#confirmAmount').value=Number(i.quoted_rate||0);$('#confirmNote').value='';$('#confirmDialog').showModal()}
@@ -36,9 +36,29 @@ async function setSessionStatus(b,status){
   const {error}=await db.from('bookings').update({session_status:status,session_closed_at:status==='completed'?new Date().toISOString():null}).eq('id',b.id);
   if(error)return toast(error.message);
   toast(status==='completed'?'Session marked completed. Earned Income will update.':'Session updated.');
-  loadBookings();loadClients();
+  loadBookings();loadPaymentFollowups();loadClients();
 }
 function openPayment(b){activePaymentBooking=b;const paid=paymentTotals.get(b.id)||0,total=Number(b.total_amount||0),bal=Math.max(0,total-paid);$('#paymentTitle').textContent=b.client_name;$('#paymentMeta').innerHTML=`${esc(b.session_date)} • ${hour(b.start_hour)}–${hour(b.end_hour)}`;$('#paymentTotal').textContent=money(total);$('#paymentPaid').textContent=money(paid);$('#paymentBalance').textContent=money(bal);$('#paymentAmount').value=bal||'';$('#paymentAmount').max=bal;$('#paymentDate').value=ymd(new Date());$('#paymentNote').value='';$('#paymentDialog').showModal()}
+async function loadPaymentFollowups(){
+  const list=$('#paymentFollowupList'),count=$('#paymentFollowupCount');
+  if(!list)return;
+  const {data:bookings,error}=await db.from('bookings').select('*').eq('status','confirmed').eq('session_status','completed').order('session_date',{ascending:false}).order('start_hour',{ascending:false}).limit(120);
+  if(error){list.innerHTML=`<div class="empty">${esc(error.message)}</div>`;if(count)count.textContent='0';return}
+  const ids=(bookings||[]).map(b=>b.id),paidMap=new Map();
+  if(ids.length){
+    const {data:p,error:pe}=await db.from('booking_payments').select('booking_id,amount').in('booking_id',ids);
+    if(pe){list.innerHTML=`<div class="empty">${esc(pe.message)}</div>`;if(count)count.textContent='0';return}
+    (p||[]).forEach(x=>paidMap.set(x.booking_id,(paidMap.get(x.booking_id)||0)+Number(x.amount||0)));
+  }
+  const rows=(bookings||[]).map(b=>({...b,paid:paidMap.get(b.id)||0})).filter(b=>Number(b.total_amount||0)-b.paid>0.001);
+  if(count)count.textContent=String(rows.length);
+  list.innerHTML=rows.length?rows.map(b=>{
+    const total=Number(b.total_amount||0),bal=Math.max(0,total-b.paid),state=b.paid>0?'Partial':'Unpaid';
+    return `<article class="card payment-followup-card" id="payment-followup-${b.id}"><div class="card-top"><div><h3>${esc(b.client_name)}</h3><div class="meta">${esc(b.session_date)} • ${hour(b.start_hour)}–${hour(b.end_hour)}<br>${b.participant_count||1} player${Number(b.participant_count||1)>1?'s':''} • ${money(total)} total<br>${money(b.paid)} paid • <strong>${money(bal)} due</strong></div></div><div class="tag-stack"><span class="tag">completed</span><span class="tag payment ${state.toLowerCase()}">${state}</span></div></div><div class="card-actions"><button class="mini confirm" data-followup-payment="${b.id}">Record Remaining Payment</button><button class="mini confirm-card" data-confirmation="${b.id}">Confirmation PNG</button></div></article>`;
+  }).join(''):'<div class="empty">No completed sessions need payment follow-up.</div>';
+  rows.forEach(b=>document.querySelector(`[data-followup-payment="${b.id}"]`)?.addEventListener('click',()=>{paymentTotals.set(b.id,b.paid);openPayment(b)}));
+}
+
 $('#savePaymentBtn').onclick=savePayment;
 async function savePayment(){const b=activePaymentBooking;if(!b)return;const amount=Number($('#paymentAmount').value||0),paid=paymentTotals.get(b.id)||0,bal=Math.max(0,Number(b.total_amount||0)-paid);if(amount<=0)return toast('Enter a valid payment amount.');if(amount>bal)return toast('Payment cannot be greater than the remaining balance.');const {error}=await db.from('booking_payments').insert({booking_id:b.id,amount,paid_at:$('#paymentDate').value,payment_method:$('#paymentMethod').value,note:$('#paymentNote').value.trim()||null,source:'manual'});if(error)return toast(error.message);$('#paymentDialog').close();toast('Payment recorded.');loadBookings()}
 const manualBookingState={slots:new Map(),autoAmount:0,rateOverridden:false};
