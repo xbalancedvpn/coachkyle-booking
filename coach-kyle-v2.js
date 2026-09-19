@@ -68,13 +68,20 @@
         selectedStart=h;
         selectedEnd=h+1;
       }
-    }else if(h===selectedStart-1){
-      selectedStart=h;
-    }else if(h===selectedEnd){
-      selectedEnd=h+1;
     }else{
-      selectedStart=h;
-      selectedEnd=h+1;
+      const candidateStart=Math.min(selectedStart,h);
+      const candidateEnd=Math.max(selectedEnd,h+1);
+      let continuous=true;
+      for(let x=candidateStart;x<candidateEnd;x++){
+        if(!isSlotOpen(x)){continuous=false;break}
+      }
+      if(continuous){
+        selectedStart=candidateStart;
+        selectedEnd=candidateEnd;
+      }else{
+        selectedStart=h;
+        selectedEnd=h+1;
+      }
     }
 
     renderSlots();
