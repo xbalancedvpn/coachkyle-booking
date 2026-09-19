@@ -255,9 +255,10 @@ function wireReport(){
 function init(){
   wireAdminMenu();wireNotifications();wireConfirmation();wireReport();
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadNotifications()});
+  window.addEventListener('coach:data-changed',()=>{loadNotifications();if(reportRows.length)loadReport()});
   document.addEventListener('click',e=>{
     if(e.target.closest('[data-confirm],[data-wait],[data-cancel],[data-payment],[data-complete],#savePaymentBtn,#confirmBookingBtn,#completeSessionBtn,#saveManualBooking')){
-      setTimeout(()=>{loadNotifications();if(reportRows.length)loadReport()},1400);
+      setTimeout(()=>{loadNotifications();if(reportRows.length)loadReport()},700);
     }
   });
 }
