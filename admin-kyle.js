@@ -212,6 +212,154 @@ async function saveManualBooking(e){
     await loadManualBookingAvailability();
   }finally{btn.disabled=false;btn.textContent=old}
 }
+function parseBookingRequestText(text){
+  const src=String(text||'').replace(/\r/g,'').trim();
+  if(!src)return null;
+  const grab=(label)=>{const m=src.match(new RegExp('^'+label+'\\s*:\\s*(.+)
+  const form=$('#manualBookingForm');if(!form)return;
+  $('#openManualBookingBtn')?.addEventListener('click',()=>openManualBooking());
+  $('#pasteBookingRequestBtn')?.addEventListener('click',openPasteBooking);
+  $('#closePasteBooking')?.addEventListener('click',closePasteBooking);
+  $('#cancelPasteBooking')?.addEventListener('click',closePasteBooking);
+  $('#parseBookingRequest')?.addEventListener('click',parseAndFillBooking);
+  $('#adminManualBookingLink')?.addEventListener('click',e=>{e.preventDefault();openManualBooking()});
+  $('#closeManualBooking')?.addEventListener('click',closeManualBooking);
+  $('#cancelManualBooking')?.addEventListener('click',closeManualBooking);
+  $('#manualBookingDate')?.addEventListener('change',loadManualBookingAvailability);
+  $('#manualBookingStart')?.addEventListener('change',updateManualBookingEndOptions);
+  $('#manualBookingEnd')?.addEventListener('change',()=>syncManualAutoRate());
+  $('#manualBookingPlayers')?.addEventListener('change',()=>{renderManualParticipantFields();syncManualAutoRate()});
+  $('#manualBookingName')?.addEventListener('input',updateManualBookingSummary);
+  $('#manualBookingPayment')?.addEventListener('input',updateManualBookingSummary);
+  $('#manualBookingAmount')?.addEventListener('input',()=>{manualBookingState.rateOverridden=Number($('#manualBookingAmount').value||0)!==manualBookingState.autoAmount;updateManualBookingSummary()});
+  $('#resetManualBookingRate')?.addEventListener('click',()=>syncManualAutoRate(true));
+  $('#manualBookingClient')?.addEventListener('change',()=>{
+    const row=clientCache.find(x=>String(x.id)===String($('#manualBookingClient').value));
+    if(row){$('#manualBookingName').value=row.full_name||'';$('#manualBookingContact').value=row.contact||''}else{$('#manualBookingName').value='';$('#manualBookingContact').value=''}
+    updateManualBookingSummary();
+  });
+  form.addEventListener('submit',saveManualBooking);
+}
+wireManualBooking();
+
+async function cancelBooking(b){if(!confirm(`Cancel booking for ${b.client_name}?`))return;const {error}=await db.from('bookings').update({status:'cancelled',session_status:'cancelled',cancelled_at:new Date().toISOString()}).eq('id',b.id);if(error)return toast(error.message);await db.from('schedule_slots').delete().eq('booking_id',b.id);toast('Booking cancelled and hours reopened.');loadAll()}
+let pendingBlockSlot=null;
+function publicBlockReason(note){
+  const s=String(note||'');
+  return s.startsWith('PUBLIC:')?s.slice(7).trim():'';
+}
+async function loadSchedule(){
+  const d=$('#scheduleDate').value||ymd(new Date());
+  const {data,error}=await db.from('schedule_slots').select('*').eq('slot_date',d).order('start_hour');
+  if(error)return $('#scheduleSlots').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+  const map=new Map((data||[]).map(r=>[Number(r.start_hour),r]));
+  if(d===ymd(new Date()))$('#metricBlocked').textContent=(data||[]).filter(r=>r.status==='unavailable').length;
+  let html='';
+  for(let h=8;h<22;h++){
+    const r=map.get(h),st=r?.status||'available',reason=publicBlockReason(r?.notes);
+    html+=`<button class="slot ${st}" data-hour="${h}" ${st==='booked'?'disabled':''}><span class="slot-time">${shortHour(h)} to ${shortHour(h+1)}</span>${st==='unavailable'?'<small>'+(reason?esc(reason):'Coach Unavailable')+'</small>':st==='booked'?'<small>Booked</small>':'<small>Available</small>'}</button>`;
+  }
+  $('#scheduleSlots').innerHTML=html;
+  $('#scheduleSlots .slot:not([disabled])').forEach(btn=>btn.onclick=()=>toggleSlot(d,Number(btn.dataset.hour),map.get(Number(btn.dataset.hour))));
+}
+function openBlockReason(date,h){
+  pendingBlockSlot={date,h};
+  $('#blockReasonTime').textContent=`${date} • ${hour(h)}–${hour(h+1)}`;
+  $('#blockReason').value='Coach Unavailable';
+  $('#blockReasonOther').value='';
+  $('#blockReasonOtherWrap').style.display='none';
+  $('#blockReasonPublic').checked=true;
+  $('#blockReasonDialog').showModal();
+}
+async function saveBlockReason(){
+  if(!pendingBlockSlot)return;
+  let reason=$('#blockReason').value;
+  if(reason==='Other')reason=$('#blockReasonOther').value.trim()||'Coach Unavailable';
+  const note=($('#blockReasonPublic').checked?'PUBLIC:':'PRIVATE:')+reason;
+  const {error}=await db.from('schedule_slots').upsert({slot_date:pendingBlockSlot.date,start_hour:pendingBlockSlot.h,status:'unavailable',notes:note},{onConflict:'slot_date,start_hour'});
+  if(error)return toast(error.message);
+  $('#blockReasonDialog').close();
+  toast(`${hour(pendingBlockSlot.h)} blocked • ${reason}.`);
+  pendingBlockSlot=null;
+  await loadSchedule();
+}
+async function toggleSlot(date,h,row){
+  if(row?.status==='unavailable'){
+    const {error}=await db.from('schedule_slots').delete().eq('id',row.id);
+    if(error)return toast(error.message);
+    toast(`${hour(h)} reopened.`);
+    await loadSchedule();
+  }else openBlockReason(date,h);
+}
+$('#blockReason')?.addEventListener('change',()=>{$('#blockReasonOtherWrap').style.display=$('#blockReason').value==='Other'?'grid':'none'});
+$('#closeBlockReason')?.addEventListener('click',()=>$('#blockReasonDialog').close());
+$('#cancelBlockReason')?.addEventListener('click',()=>$('#blockReasonDialog').close());
+$('#saveBlockReason')?.addEventListener('click',saveBlockReason);
+async function loadClients(){const {data,error}=await db.from('clients').select('*').eq('is_active',true).order('full_name').limit(300);if(error){$('#clients').innerHTML=`<div class="empty">${esc(error.message)}</div>`;return}clientCache=data||[];$('#metricClients').textContent=clientCache.length;renderClientList()}
+function openAddClientDialog(){const d=$('#addClientDialog');if(!d)return;$('#manualClientName').value='';$('#manualClientContact').value='';$('#manualClientNote').value='';d.showModal()}
+function closeAddClientDialog(){const d=$('#addClientDialog');if(d?.open)d.close()}
+$('#manualAddClientBtn')?.addEventListener('click',openAddClientDialog);
+$('#closeAddClientDialog')?.addEventListener('click',closeAddClientDialog);
+$('#cancelAddClient')?.addEventListener('click',closeAddClientDialog);
+$('#addClientForm')?.addEventListener('submit',async e=>{e.preventDefault();const full=$('#manualClientName').value.trim().replace(/\s+/g,' '),contact=$('#manualClientContact').value.trim(),notes=$('#manualClientNote').value.trim();if(full.length<2)return toast('Enter the client full name.');const existing=clientCache.find(c=>c.is_active!==false&&String(c.full_name||'').trim().toLowerCase()===full.toLowerCase());if(existing){closeAddClientDialog();activeClient=existing;toast('Client already exists. Opening profile.');$('#clientName').textContent=existing.full_name;$('#clientMeta').textContent=existing.contact||'No contact saved';$('#clientDialog').showModal();await loadClientDetails();return}const n=splitFullName(full),payload={first_name:n.first||null,last_name:n.last||null,full_name:full,name_key:full.toLowerCase(),contact:contact||null,contact_key:contact?contact.toLowerCase():null,notes:notes||null,is_active:true};const btn=$('#saveManualClient'),old=btn.textContent;btn.disabled=true;btn.textContent='Adding…';try{const {data,error}=await db.from('clients').insert(payload).select('*').single();if(error)throw error;closeAddClientDialog();toast('Client added. You can now add a progress assessment.');await loadClients();activeClient=data;$('#clientName').textContent=data.full_name;$('#clientMeta').textContent=data.contact||'No contact saved';$('#clientDialog').showModal();await loadClientDetails()}catch(err){toast(err.message||'Could not add client.')}finally{btn.disabled=false;btn.textContent=old}});
+function renderClientList(){const q=($('#clientSearch').value||'').trim().toLowerCase(),rows=clientCache.filter(c=>!q||c.full_name.toLowerCase().includes(q)||(c.contact||'').toLowerCase().includes(q));$('#clients').innerHTML=rows.length?rows.map(c=>`<button class="client-card" data-client="${c.id}"><span>${esc(c.full_name)}</span><small>${esc(c.contact||'No contact saved')}</small><b>View profile →</b></button>`).join(''):'<div class="empty">No matching clients.</div>';$$('[data-client]').forEach(btn=>btn.onclick=()=>openClient(btn.dataset.client))}
+async function openClient(id){activeClient=clientCache.find(c=>c.id===id);if(!activeClient)return;$('#clientName').textContent=activeClient.full_name;$('#clientMeta').textContent=activeClient.contact||'No contact saved';$('#clientDialog').showModal();await loadClientDetails()}
+$('#closeClientDialog').onclick=()=>$('#clientDialog').close();
+async function loadClientDetails(){if(!activeClient)return;const {data:bp,error}=await db.from('booking_participants').select('booking_id').eq('client_id',activeClient.id);if(error)return toast(error.message);const ids=[...new Set((bp||[]).map(x=>x.booking_id))];let sessions=[];if(ids.length){const {data}=await db.from('bookings').select('*').in('id',ids).order('session_date',{ascending:false}).order('start_hour',{ascending:false});sessions=data||[]}const completed=sessions.filter(x=>x.session_status==='completed').length,hours=sessions.filter(x=>x.status==='confirmed').reduce((s,x)=>s+(Number(x.end_hour)-Number(x.start_hour)),0);$('#clientStats').innerHTML=`<div><span>Total sessions</span><strong>${sessions.length}</strong></div><div><span>Completed</span><strong>${completed}</strong></div><div><span>Coaching hours</span><strong>${hours}</strong></div>`;$('#clientSessions').innerHTML=sessions.length?sessions.map(s=>`<div class="timeline-item"><strong>${esc(s.session_date)} • ${hour(s.start_hour)}–${hour(s.end_hour)}</strong><small>${esc(s.coaching_type||'Coaching')} • ${esc(s.session_status)} • ${money(s.total_amount)}</small>${s.session_outcome_note?`<p>${esc(s.session_outcome_note)}</p>`:''}</div>`).join(''):'<div class="empty">No session history yet.</div>';await loadProgress()}
+async function loadProgress(){if(!activeClient)return;const {data,error}=await db.from('progress_assessments').select('*').eq('client_id',activeClient.id).order('assessment_date',{ascending:false}).order('created_at',{ascending:false}).limit(30);if(error)return $('#clientProgress').innerHTML=`<div class="empty">${esc(error.message)}</div>`;if(!data.length){$('#clientProgress').innerHTML='<div class="empty">No assessment yet.</div>';return}const latest=data[0],scores=skillDefs.map(([k,l])=>latest[k]!=null?`<div class="skill-score"><span>${l}</span><strong>${latest[k]}/5</strong></div>`:'').join('');$('#clientProgress').innerHTML=`<div class="progress-latest"><span class="eyebrow">LATEST • ${esc(latest.assessment_date)}</span><div class="skill-score-grid">${scores}</div>${latest.coach_note?`<p>${esc(latest.coach_note)}</p>`:''}</div><div class="assessment-history">${data.map(a=>`<div><strong>${esc(a.assessment_date)} • ${esc(a.assessment_type)}</strong><small>${a.coach_note?esc(a.coach_note):'No note'}</small></div>`).join('')}</div>`}
+function buildSkillFields(){const x=$('#skillFields');if(!x||x.children.length)return;const labels={1:'Needs work',2:'Emerging',3:'Developing',4:'Proficient',5:'Strong'};x.innerHTML='<div class="rating-scale-legend">'+Object.entries(labels).map(([n,t])=>`<span><b>${n}</b>${t}</span>`).join('')+'</div>'+skillDefs.map(([k,l])=>`<label class="rating-field"><span class="rating-field-name">${l}</span><select id="skill_${k}" class="rating-native" aria-label="${l} rating"><option value="">Not rated</option>${[1,2,3,4,5].map(n=>`<option value="${n}">${n} - ${labels[n]}</option>`).join('')}</select><div class="rating-control" data-rating-for="${k}">${[1,2,3,4,5].map(n=>`<button type="button" class="rating-chip" data-rating-skill="${k}" data-rating-value="${n}" aria-label="${l}: ${n} - ${labels[n]}">${n}</button>`).join('')}</div><span class="rating-choice-label" id="rating_status_${k}">Not rated — tap 1 to 5</span></label>`).join('');x.addEventListener('click',e=>{const b=e.target.closest('[data-rating-skill]');if(!b)return;const k=b.dataset.ratingSkill,v=b.dataset.ratingValue,select=$('#skill_'+k),control=b.closest('.rating-control'),status=$('#rating_status_'+k);if(!select||!control)return;select.value=v;control.querySelectorAll('.rating-chip').forEach(btn=>btn.classList.toggle('active',btn===b));if(status){status.textContent=`${v} - ${labels[v]}`;status.classList.add('selected')}})}
+function resetProgressRatings(){skillDefs.forEach(([k])=>{const s=$('#skill_'+k);if(s)s.value='';document.querySelectorAll(`[data-rating-skill="${k}"]`).forEach(b=>b.classList.remove('active'));const status=$('#rating_status_'+k);if(status){status.textContent='Not rated — tap 1 to 5';status.classList.remove('selected')}})}$('#addProgressBtn').onclick=()=>{if(!activeClient)return;buildSkillFields();$('#progressTitle').textContent=`Assess ${activeClient.full_name}`;$('#assessmentDate').value=ymd(new Date());$('#assessmentType').value='session';$('#assessmentNote').value='';resetProgressRatings();if($('#clientDialog').open)$('#clientDialog').close();$('#progressDialog').showModal()};const reopenClient=()=>{if(activeClient&&!$('#clientDialog').open)$('#clientDialog').showModal()};$('#closeProgressDialog').onclick=()=>{$('#progressDialog').close();reopenClient()};$('#cancelProgress').onclick=()=>{$('#progressDialog').close();reopenClient()};
+$('#progressForm').addEventListener('submit',async e=>{e.preventDefault();if(!activeClient)return;const payload={client_id:activeClient.id,assessment_date:$('#assessmentDate').value,assessment_type:$('#assessmentType').value,assessment_source:'coach',coach_note:$('#assessmentNote').value.trim()||null};let rated=0;skillDefs.forEach(([k])=>{const v=$('#skill_'+k).value;if(v){payload[k]=Number(v);rated++}});if(!rated&&!payload.coach_note)return toast('Add at least one skill rating or a coach note.');const {error}=await db.from('progress_assessments').insert(payload);if(error)return toast(error.message);$('#progressDialog').close();reopenClient();toast('Progress assessment saved.');loadProgress()});
+init();
+})();,'mi'));return m?m[1].trim():''};
+  const code=grab('Request Code');
+  let date='',start=null,end=null,players=null;
+  if(code){
+    const m=code.match(/CKREQ\|([0-9]{4}-[0-9]{2}-[0-9]{2})\|(\d{1,2})\|(\d{1,2})\|(\d{1,2})/i);
+    if(m){date=m[1];start=Number(m[2]);end=Number(m[3]);players=Number(m[4])}
+  }
+  if(!date){
+    const raw=grab('Date');
+    const d=raw?new Date(raw):null;
+    if(d&&!Number.isNaN(d.getTime()))date=ymd(d);
+  }
+  if(start==null||end==null){
+    const tm=grab('Time').match(/(\d{1,2})(?::\d{2})?\s*(AM|PM)\s*-\s*(\d{1,2})(?::\d{2})?\s*(AM|PM)/i);
+    const to24=(h,ampm)=>{h=Number(h)%12;return h+(String(ampm).toUpperCase()==='PM'?12:0)};
+    if(tm){start=to24(tm[1],tm[2]);end=to24(tm[3],tm[4])}
+  }
+  if(players==null){const p=Number((grab('Pax').match(/\d+/)||[])[0]);if(Number.isFinite(p))players=p}
+  const feeRaw=grab('Estimated Coaching Fee').replace(/[^0-9.]/g,'');
+  const amount=feeRaw?Number(feeRaw):null;
+  return {
+    name:grab('Booking Name'),
+    contact:grab('Contact')==='Not provided'?'':grab('Contact'),
+    date,start,end,players:players||1,
+    goal:grab('Goal')||'General coaching',
+    amount:Number.isFinite(amount)?amount:null,
+    source:'Messenger booking request'
+  };
+}
+function openPasteBooking(){
+  $('#pasteBookingText').value='';
+  $('#pasteBookingStatus').className='manual-availability';
+  $('#pasteBookingStatus').textContent='Waiting for a booking request.';
+  $('#pasteBookingDialog').showModal();
+  setTimeout(()=>$('#pasteBookingText')?.focus(),80);
+}
+function closePasteBooking(){$('#pasteBookingDialog')?.close()}
+async function parseAndFillBooking(){
+  const parsed=parseBookingRequestText($('#pasteBookingText').value);
+  const status=$('#pasteBookingStatus');
+  if(!parsed?.name||!parsed.date||parsed.start==null||parsed.end==null){
+    status.className='manual-availability warn';
+    status.textContent='Could not read the booking details. Paste the complete message copied from the Coach Kyle public site.';
+    return;
+  }
+  closePasteBooking();
+  await openManualBooking(parsed);
+  toast('Booking request parsed. Review the details, then create the confirmed booking.');
+}
 function wireManualBooking(){
   const form=$('#manualBookingForm');if(!form)return;
   $('#openManualBookingBtn')?.addEventListener('click',openManualBooking);
