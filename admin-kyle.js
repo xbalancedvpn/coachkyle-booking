@@ -60,7 +60,18 @@ async function loadPaymentFollowups(){
 }
 
 $('#savePaymentBtn').onclick=savePayment;
-async function savePayment(){const b=activePaymentBooking;if(!b)return;const amount=Number($('#paymentAmount').value||0),paid=paymentTotals.get(b.id)||0,bal=Math.max(0,Number(b.total_amount||0)-paid);if(amount<=0)return toast('Enter a valid payment amount.');if(amount>bal)return toast('Payment cannot be greater than the remaining balance.');const {error}=await db.from('booking_payments').insert({booking_id:b.id,amount,paid_at:$('#paymentDate').value,payment_method:$('#paymentMethod').value,note:$('#paymentNote').value.trim()||null,source:'manual'});if(error)return toast(error.message);$('#paymentDialog').close();toast('Payment recorded.');loadBookings()}
+async function savePayment(){
+  const b=activePaymentBooking;if(!b)return;
+  const amount=Number($('#paymentAmount').value||0),paid=paymentTotals.get(b.id)||0,bal=Math.max(0,Number(b.total_amount||0)-paid);
+  if(amount<=0)return toast('Enter a valid payment amount.');
+  if(amount>bal)return toast('Payment cannot be greater than the remaining balance.');
+  const {error}=await db.from('booking_payments').insert({booking_id:b.id,amount,paid_at:$('#paymentDate').value,payment_method:$('#paymentMethod').value,note:$('#paymentNote').value.trim()||null,source:'manual'});
+  if(error)return toast(error.message);
+  $('#paymentDialog').close();
+  toast('Payment recorded.');
+  await Promise.all([loadBookings(),loadPaymentFollowups(),loadClients()]);
+  window.dispatchEvent(new CustomEvent('coach:data-changed',{detail:{type:'payment',bookingId:b.id}}));
+}
 const manualBookingState={slots:new Map(),autoAmount:0,rateOverridden:false};
 function manualBookingRate(players){const n=Math.max(1,Number(players)||1);return 500+((n-1)*200)}
 function manualBookingDuration(){const s=Number($('#manualBookingStart')?.value),e=Number($('#manualBookingEnd')?.value);return Number.isFinite(s)&&Number.isFinite(e)&&e>s?e-s:0}
@@ -126,15 +137,33 @@ function updateManualBookingSummary(){
   const name=$('#manualBookingName')?.value.trim()||'Client',date=$('#manualBookingDate')?.value||'No date',s=$('#manualBookingStart')?.value,e=$('#manualBookingEnd')?.value,n=Number($('#manualBookingPlayers')?.value||1),amount=Number($('#manualBookingAmount')?.value||0),pay=Number($('#manualBookingPayment')?.value||0),dur=manualBookingDuration();
   box.innerHTML=`<strong>${esc(name)}</strong><br>${esc(date)} • ${s&&e?hour(Number(s))+'–'+hour(Number(e)):'Choose time'} • ${dur||0} hour${dur===1?'':'s'}<br>${n} player${n>1?'s':''} • ${money(amount)} coaching fee${pay>0?' • '+money(pay)+' payment now':''}`;
 }
-function openManualBooking(){
+async function openManualBooking(prefill=null){
   const dlg=$('#manualBookingDialog');if(!dlg)return;
-  refreshManualClientOptions();buildManualPlayerOptions();renderManualParticipantFields();
+  refreshManualClientOptions();buildManualPlayerOptions();
   $('#manualBookingForm').reset();
-  $('#manualBookingClient').value='';$('#manualBookingPlayers').value='1';
-  const now=ymd(new Date());$('#manualBookingDate').min=now;$('#manualBookingDate').value=now;$('#manualBookingPaymentDate').value=now;
+  $('#manualBookingClient').value='';
+  const now=ymd(new Date());
+  $('#manualBookingDate').min=now;$('#manualBookingDate').value=prefill?.date||now;$('#manualBookingPaymentDate').value=now;
+  $('#manualBookingPlayers').value=String(Math.max(1,Math.min(12,Number(prefill?.players)||1)));
+  $('#manualBookingName').value=prefill?.name||'';
+  $('#manualBookingContact').value=prefill?.contact||'';
+  $('#manualBookingNote').value=prefill?.goal?('Goal: '+prefill.goal+(prefill.source?'\nSource: '+prefill.source:'')):(prefill?.source?('Source: '+prefill.source):'');
   manualBookingState.rateOverridden=false;manualBookingState.slots=new Map();
   $('#manualBookingAmount').value='';$('#manualBookingPayment').value='0';
-  renderManualParticipantFields();loadManualBookingAvailability();dlg.showModal();
+  renderManualParticipantFields();
+  dlg.showModal();
+  await loadManualBookingAvailability();
+  if(prefill?.start!=null){
+    $('#manualBookingStart').value=String(prefill.start);
+    updateManualBookingEndOptions();
+    if(prefill?.end!=null&&[...$('#manualBookingEnd').options].some(o=>Number(o.value)===Number(prefill.end)))$('#manualBookingEnd').value=String(prefill.end);
+  }
+  syncManualAutoRate();
+  if(prefill?.amount!=null&&Number.isFinite(Number(prefill.amount))){
+    $('#manualBookingAmount').value=String(Number(prefill.amount));
+    manualBookingState.rateOverridden=Number(prefill.amount)!==manualBookingState.autoAmount;
+  }
+  updateManualBookingSummary();
 }
 function closeManualBooking(){$('#manualBookingDialog')?.close()}
 async function saveManualBooking(e){
