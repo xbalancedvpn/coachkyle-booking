@@ -19,6 +19,22 @@ function paymentState(row){
   return 'paid';
 }
 function isAdvance(row){return row.paid>0&&row.session_status!=='completed'}
+function inquiryRequestMetaOps(i){
+  const src=String(i?.source_text||'');
+  const ref=(src.match(/^Request Ref:\s*(.+)$/mi)||[])[1]?.trim()||null;
+  const version=Number((src.match(/^Request Version:\s*(\d+)$/mi)||[])[1]||0);
+  return {ref,version};
+}
+function latestInquiryVersionsOps(rows){
+  const keep=new Map(),plain=[];
+  for(const row of (rows||[])){
+    const meta=inquiryRequestMetaOps(row);
+    if(!meta.ref){plain.push(row);continue}
+    const prev=keep.get(meta.ref),prevMeta=prev?inquiryRequestMetaOps(prev):null;
+    if(!prev||meta.version>(prevMeta?.version||0)||(meta.version===(prevMeta?.version||0)&&String(row.created_at||'')>String(prev.created_at||'')))keep.set(meta.ref,row);
+  }
+  return [...plain,...keep.values()].sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+}
 function reportFilterMatch(row,filter){
   const state=paymentState(row);
   if(filter==='all')return true;
@@ -42,10 +58,11 @@ async function loadNotifications(){
   if(!bell||!list)return;
   try{
     const [{data:inq,error:ie},{data:completed,error:be}]=await Promise.all([
-      db.from('inquiries').select('id,client_name,preferred_date,start_hour,end_hour,created_at').eq('status','new').order('created_at',{ascending:false}).limit(20),
+      db.from('inquiries').select('id,client_name,preferred_date,start_hour,end_hour,created_at,source_text').eq('status','new').order('created_at',{ascending:false}).limit(60),
       db.from('bookings').select('id,client_name,session_date,start_hour,end_hour,total_amount,session_status').eq('status','confirmed').eq('session_status','completed').order('session_date',{ascending:false}).limit(80)
     ]);
     if(ie)throw ie;if(be)throw be;
+    const latestInq=latestInquiryVersionsOps(inq||[]);
     const ids=(completed||[]).map(x=>x.id);
     const paidMap=new Map();
     if(ids.length){
@@ -54,18 +71,18 @@ async function loadNotifications(){
       (p||[]).forEach(x=>paidMap.set(x.booking_id,(paidMap.get(x.booking_id)||0)+Number(x.amount||0)));
     }
     const unpaid=(completed||[]).map(b=>({...b,paid:paidMap.get(b.id)||0})).filter(b=>Number(b.total_amount||0)-b.paid>0.001);
-    const total=(inq||[]).length+unpaid.length;
+    const total=latestInq.length+unpaid.length;
     badge.textContent=String(total);
     badge.classList.toggle('hidden-badge',total===0);
     const parts=[];
-    if(inq?.length){
-      parts.push(`<div class="notify-group"><h4>New inquiries <span>${inq.length}</span></h4>${inq.slice(0,6).map(x=>`<a href="#inquiriesSection"><strong>${esc(x.client_name)}</strong><small>${esc(x.preferred_date||'No date')} • ${x.start_hour==null?'No time':hour(x.start_hour)+'–'+hour(x.end_hour)}</small></a>`).join('')}</div>`);
+    if(latestInq.length){
+      parts.push(`<div class="notify-group"><h4>New inquiries <span>${latestInq.length}</span></h4>${latestInq.slice(0,6).map(x=>`<a href="#inquiriesSection"><strong>${esc(x.client_name)}</strong><small>${esc(x.preferred_date||'No date')} • ${x.start_hour==null?'No time':hour(x.start_hour)+'–'+hour(x.end_hour)}</small></a>`).join('')}</div>`);
     }
     if(unpaid.length){
-      parts.push(`<div class="notify-group"><h4>Completed • payment pending <span>${unpaid.length}</span></h4>${unpaid.slice(0,6).map(x=>`<a href="#payment-followup-${x.id}"><strong>${esc(x.client_name)}</strong><small>${esc(x.session_date)} • ${money(Number(x.total_amount||0)-x.paid)} due</small></a>`).join('')}</div>`);
+      parts.push(`<div class="notify-group"><h4>Completed • payment pending <span>${unpaid.length}</span></h4>${unpaid.slice(0,6).map(x=>{const target=x.session_date===today()?'#booking-card-'+x.id:'#payment-followup-'+x.id;return `<a href="${target}"><strong>${esc(x.client_name)}</strong><small>${esc(x.session_date)} • ${money(Number(x.total_amount||0)-x.paid)} due</small></a>`}).join('')}</div>`);
     }
     list.innerHTML=parts.length?parts.join(''):'<div class="notify-empty">No items need attention.</div>';
-    $('#attentionInquiries').textContent=String(inq?.length||0);
+    $('#attentionInquiries').textContent=String(latestInq.length);
     $('#attentionCompletedDue').textContent=String(unpaid.length);
     $('#attentionPanel')?.classList.toggle('has-alerts',total>0);
   }catch(e){console.warn(e);list.innerHTML='<div class="notify-empty">Could not refresh notifications.</div>'}
