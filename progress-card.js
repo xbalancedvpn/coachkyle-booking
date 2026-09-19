@@ -23,31 +23,25 @@ let y=500;ctx.font='900 20px Arial';for(const [k,l] of skills){const v=Number(la
 const rated=skills.map(([k,l])=>({l,v:Number(latest[k]||0)})).filter(x=>x.v>0);const best=[...rated].sort((a,b)=>b.v-a.v)[0],focus=[...rated].sort((a,b)=>a.v-b.v)[0];y=1140;rounded(ctx,72,y,936,118,24);ctx.fillStyle='#101010';ctx.fill();ctx.fillStyle='#888';ctx.font='700 16px Arial';ctx.fillText('STRONGEST',102,y+34);ctx.fillText('NEXT FOCUS',410,y+34);ctx.fillText('ASSESSMENT',715,y+34);ctx.fillStyle='#fff';ctx.font='900 22px Arial';ctx.fillText(best?.l||'Not rated',102,y+72);ctx.fillText(focus?.l||'Not rated',410,y+72);ctx.fillText(String(latest.assessment_type||'session').toUpperCase(),715,y+72);ctx.fillStyle='#5d5d5d';ctx.font='700 15px Arial';ctx.fillText('Progress is based on Coach Kyle skill assessments. Contact and payment details are never shown.',72,1310);return canvas}
 async function buildProgressCard(){const btn=$('#shareProgressBtn');if(!btn)return;const old=btn.textContent;btn.disabled=true;btn.textContent='Preparing…';try{const client=await resolveClient();if(!client){alert('Client profile could not be found.');return}const assessments=await fetchAssessments(client.id);if(!assessments.length){alert('Add a progress assessment first before creating a progress card.');return}current.client=client;current.assessments=assessments;const canvas=await drawCard(client,assessments);current.blob=await new Promise(r=>canvas.toBlob(r,'image/png',1));if($('#clientDialog')?.open)$('#clientDialog').close();$('#progressCardDialog').showModal()}catch(e){console.error(e);alert(e.message||'Could not create the progress card.')}finally{btn.disabled=false;btn.textContent=old}}
 function fileName(){return `coach-kyle-${(current.client?.full_name||'player').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}-progress.png`}
-function isAndroid(){return /Android/i.test(navigator.userAgent||'')}
 function blobToDataUrl(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error||new Error('Could not prepare image.'));r.readAsDataURL(blob)})}
 async function directSave(blob,name){
   if(!blob)return false;
-  const file=new File([blob],name,{type:'image/png'});
-  if(isAndroid()&&navigator.canShare?.({files:[file]})){
-    try{
-      toast('Choose Files, Photos, or your file manager to save the PNG.');
-      await navigator.share({title:'Save Coach Kyle Progress Card',files:[file]});
-      return true;
-    }catch(e){if(e?.name==='AbortError')return true;console.warn(e)}
-  }
-  try{
-    if(!isAndroid()&&window.showSaveFilePicker){
-      const handle=await window.showSaveFilePicker({suggestedName:name,types:[{description:'PNG image',accept:{'image/png':['.png']}}]});
-      const writable=await handle.createWritable();await writable.write(blob);await writable.close();toast('Progress card saved.');return true;
-    }
-  }catch(e){if(e?.name==='AbortError')return true;console.warn(e)}
   try{
     const dataUrl=await blobToDataUrl(blob),a=document.createElement('a');
-    a.href=dataUrl;a.download=name;a.style.display='none';document.body.appendChild(a);a.click();
-    setTimeout(()=>a.remove(),1000);
+    a.href=dataUrl;
+    a.download=name;
+    a.rel='noopener';
+    a.style.display='none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>a.remove(),1200);
     toast('PNG download started.');
     return true;
-  }catch(e){console.warn(e);toast('Could not download directly. Use Share to save the PNG.');return false}
+  }catch(e){
+    console.warn(e);
+    toast('Direct download was blocked by this browser. Use Share instead.');
+    return false;
+  }
 }
 const closeProgressCard=()=>{$('#progressCardDialog').close();const cd=$('#clientDialog');if(cd&&!cd.open&&$('#clientName')?.textContent?.trim()&&$('#clientName').textContent.trim()!=='Client')cd.showModal()};$('#shareProgressBtn')?.addEventListener('click',buildProgressCard);$('#closeProgressCard')?.addEventListener('click',closeProgressCard);$('#closeProgressCardBottom')?.addEventListener('click',closeProgressCard);
 $('#downloadProgressCard')?.addEventListener('click',async()=>{if(!current.blob)return alert('Progress card is not ready yet.');await directSave(current.blob,fileName())});
