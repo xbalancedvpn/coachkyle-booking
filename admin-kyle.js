@@ -1,7 +1,7 @@
 (() => {
 const URL='https://pnomsapqqkgcvkzknujc.supabase.co',KEY='sb_publishable_EokwTiLlK_qy2Upc_0j3hw_noRX84_q';
 const db=window.supabase.createClient(URL,KEY),$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-let activeInquiry=null,activePaymentBooking=null,activeClient=null,paymentTotals=new Map(),clientCache=[];
+let activeInquiry=null,activePaymentBooking=null,activeClient=null,paymentTotals=new Map(),clientCache=[],showAllCompleted=false;
 const pad=n=>String(n).padStart(2,'0'),ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`,hour=h=>`${h%12||12}:00 ${h<12?'AM':'PM'}`,shortHour=h=>`${h%12||12}${h<12?'am':'pm'}`;
 const skillDefs=[['serve','Serve'],['return_score','Return'],['forehand','Forehand'],['backhand','Backhand'],['dinking','Dinking'],['footwork','Footwork'],['positioning','Positioning'],['consistency','Consistency'],['strategy','Strategy'],['confidence','Confidence']];
 function toast(t){const x=$('#toast');x.textContent=t;x.classList.add('show');setTimeout(()=>x.classList.remove('show'),2800)}
@@ -14,17 +14,58 @@ async function init(){const {data:{session}}=await db.auth.getSession();session?
 $('#loginForm').addEventListener('submit',async e=>{e.preventDefault();$('#loginError').textContent='';const {data,error}=await db.auth.signInWithPassword({email:$('#email').value.trim(),password:$('#password').value});if(error)return $('#loginError').textContent=error.message;showAdmin(data.session)});
 $('#logoutBtn').onclick=async()=>{await db.auth.signOut();showLogin()};
 $('#refreshBtn').onclick=loadAll;$('#scheduleDate').addEventListener('change',loadSchedule);$('#clientSearch').addEventListener('input',renderClientList);
-async function loadAll(){await Promise.all([loadInquiries(),loadBookings(),loadPaymentFollowups(),loadSchedule(),loadClients()])}
+async function loadAll(){await Promise.all([loadInquiries(),loadBookings(),loadPaymentFollowups(),loadCompletedSessions(),loadSchedule(),loadClients()])}
 async function loadInquiries(){const {data,error}=await db.from('inquiries').select('*').in('status',['new','waiting','tentative']).order('created_at',{ascending:false}).limit(50);if(error)return $('#inquiries').innerHTML=`<div class="empty">${esc(error.message)}</div>`;$('#metricInquiries').textContent=data.length;$('#inquiries').innerHTML=data.length?data.map(i=>`<article class="card"><div class="card-top"><div><h3>${esc(i.client_name)}</h3><div class="meta">${esc(i.preferred_date||'No date')} • ${i.start_hour==null?'No time':`${hour(i.start_hour)}–${hour(i.end_hour)}`}<br>${i.participant_count||1} player${Number(i.participant_count||1)>1?'s':''} • ${money(i.quoted_rate)} • ${esc(i.goal_focus||'General coaching')}<br>${esc(i.contact||'No contact')}</div></div><span class="tag ${i.status==='new'?'new':''}">${esc(i.status)}</span></div><div class="card-actions"><button class="mini confirm" data-confirm="${i.id}">Confirm</button><button class="mini" data-wait="${i.id}">Mark Waiting</button><button class="mini" data-cancel="${i.id}">Cancel</button></div></article>`).join(''):'<div class="empty">No pending inquiries.</div>';data.forEach(i=>{document.querySelector(`[data-confirm="${i.id}"]`)?.addEventListener('click',()=>openConfirm(i));document.querySelector(`[data-wait="${i.id}"]`)?.addEventListener('click',()=>setInquiry(i.id,'waiting'));document.querySelector(`[data-cancel="${i.id}"]`)?.addEventListener('click',()=>setInquiry(i.id,'cancelled'))})}
 async function setInquiry(id,status){const {error}=await db.from('inquiries').update({status}).eq('id',id);if(error)return toast(error.message);toast(`Inquiry marked ${status}.`);loadInquiries()}
 function openConfirm(i){activeInquiry=i;$('#confirmTitle').textContent=i.client_name;$('#confirmMeta').innerHTML=`${esc(i.preferred_date)} • ${hour(i.start_hour)}–${hour(i.end_hour)}<br>${i.participant_count||1} player${Number(i.participant_count||1)>1?'s':''} • ${esc(i.coaching_type||'Coaching session')}<br>${esc(i.contact||'No contact')}`;$('#confirmAmount').value=Number(i.quoted_rate||0);$('#confirmNote').value='';$('#confirmDialog').showModal()}
 $('#confirmBookingBtn').onclick=confirmBooking;
 async function findOrCreateClient(p){const full=String(p.full_name||`${p.first_name||''} ${p.last_name||''}`).trim().replace(/\s+/g,' '),contact=p.contact||null;let q=db.from('clients').select('*').ilike('full_name',full).eq('is_active',true);if(contact)q=q.eq('contact',contact);const {data:found}=await q.limit(1);if(found?.length)return found[0];const n=splitFullName(full),payload={first_name:p.first_name||n.first,last_name:p.last_name||n.last,full_name:full,name_key:full.toLowerCase(),contact,contact_key:contact?String(contact).trim().toLowerCase():null,is_active:true};const {data,error}=await db.from('clients').insert(payload).select('*').single();if(error)throw error;return data}
 async function confirmBooking(){const i=activeInquiry;if(!i)return;const amount=Number($('#confirmAmount').value||0);if(i.start_hour==null||i.end_hour==null||!i.preferred_date)return toast('Inquiry has incomplete schedule details.');const {data:conflicts,error:ce}=await db.from('schedule_slots').select('start_hour,status').eq('slot_date',i.preferred_date).gte('start_hour',i.start_hour).lt('start_hour',i.end_hour).in('status',['booked','unavailable']);if(ce)return toast(ce.message);if(conflicts?.length)return toast('That time is no longer available.');const {data:participants,error:pe}=await db.from('inquiry_participants').select('*').eq('inquiry_id',i.id).order('participant_order');if(pe)return toast(pe.message);const pc=Number(i.participant_count||participants?.length||1);const {data:b,error}=await db.from('bookings').insert({session_date:i.preferred_date,start_hour:i.start_hour,end_hour:i.end_hour,client_name:i.client_name,contact:i.contact,participant_count:pc,coaching_type:i.coaching_type||`${pc} Player${pc>1?'s':''}`,rate_mode:'standard',rate_per_person:pc?amount/pc:amount,total_amount:amount,notes:$('#confirmNote').value.trim()||i.notes||null,status:'confirmed',session_status:'scheduled'}).select('id').single();if(error)return toast(error.message);try{const bp=[];let primaryClientId=null;for(const p of (participants||[])){const c=await findOrCreateClient(p);if(p.is_primary||Number(p.participant_order)===1)primaryClientId=c.id;bp.push({booking_id:b.id,client_id:c.id,participant_order:p.participant_order,first_name:p.first_name,last_name:p.last_name,full_name:p.full_name,contact:p.contact||null,contact_key:p.contact_key||null,is_primary:!!p.is_primary})}if(bp.length){const {error:e}=await db.from('booking_participants').insert(bp);if(e)throw e}if(primaryClientId)await db.from('bookings').update({client_id:primaryClientId}).eq('id',b.id);const rows=[];for(let h=i.start_hour;h<i.end_hour;h++)rows.push({slot_date:i.preferred_date,start_hour:h,status:'booked',client_name:i.client_name,contact:i.contact,coaching_type:i.coaching_type,rate:amount,booking_id:b.id});const {error:se}=await db.from('schedule_slots').upsert(rows,{onConflict:'slot_date,start_hour'});if(se)throw se;await db.from('inquiries').update({status:'confirmed'}).eq('id',i.id);$('#confirmDialog').close();toast('Booking confirmed. Client profiles updated.');await loadAll();window.dispatchEvent(new CustomEvent('coach:data-changed',{detail:{type:'booking-confirmed',bookingId:b.id,inquiryId:i.id}}))}catch(e){await db.from('booking_participants').delete().eq('booking_id',b.id);await db.from('bookings').delete().eq('id',b.id);toast(e.message||'Could not finish booking confirmation.') }}
-async function loadBookings(){const today=ymd(new Date());const {data,error}=await db.from('bookings').select('*').eq('status','confirmed').gte('session_date',today).order('session_date').order('start_hour').limit(80);if(error){$('#bookings').innerHTML=`<div class="empty">${esc(error.message)}</div>`;$('#todayBookings').innerHTML=`<div class="empty">${esc(error.message)}</div>`;return}const ids=data.map(b=>b.id);paymentTotals=new Map();if(ids.length){const {data:p}=await db.from('booking_payments').select('booking_id,amount').in('booking_id',ids);(p||[]).forEach(x=>paymentTotals.set(x.booking_id,(paymentTotals.get(x.booking_id)||0)+Number(x.amount||0)))}const balance=data.reduce((s,b)=>s+Math.max(0,Number(b.total_amount||0)-(paymentTotals.get(b.id)||0)),0);$('#metricBalance').textContent=money(balance);$('#metricBookings').textContent=data.length;const todays=data.filter(b=>b.session_date===today);$('#metricToday').textContent=todays.length;renderBookings(data,todays)}
+async function loadBookings(){
+  const today=ymd(new Date());
+  const {data,error}=await db.from('bookings').select('*').eq('status','confirmed').gte('session_date',today).order('session_date').order('start_hour').limit(120);
+  if(error){
+    $('#bookings').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+    $('#todayBookings').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+    return;
+  }
+  const ids=(data||[]).map(b=>b.id);
+  paymentTotals=new Map();
+  if(ids.length){
+    const {data:p,error:pe}=await db.from('booking_payments').select('booking_id,amount').in('booking_id',ids);
+    if(pe)return toast(pe.message);
+    (p||[]).forEach(x=>paymentTotals.set(x.booking_id,(paymentTotals.get(x.booking_id)||0)+Number(x.amount||0)));
+  }
+
+  const withBalance=(data||[]).map(b=>{
+    const paid=paymentTotals.get(b.id)||0,total=Number(b.total_amount||0);
+    return {...b,paid,balance:Math.max(0,total-paid)};
+  });
+
+  const todays=withBalance.filter(b=>b.session_date===today && (b.session_status!=='completed'||b.balance>0.001));
+  const upcoming=withBalance.filter(b=>b.session_date>today && b.session_status!=='completed');
+
+  $('#metricToday').textContent=String(todays.length);
+  $('#metricBookings').textContent=String(upcoming.length);
+  $('#metricBalance').textContent=money(withBalance.reduce((s,b)=>s+b.balance,0));
+  renderBookings(upcoming,todays);
+}
 function isSessionEarly(b){const now=new Date(),d=ymd(now);if(String(b.session_date)>d)return true;if(String(b.session_date)<d)return false;const end=Number(b.end_hour||0),nowHour=now.getHours()+(now.getMinutes()/60);return end>nowHour}
-function bookingCard(b,todayMode=false){const paid=paymentTotals.get(b.id)||0,total=Number(b.total_amount||0),bal=Math.max(0,total-paid),payState=bal<=0?'Paid':paid>0?'Partial':'Unpaid',done=b.session_status==='completed',early=!done&&isSessionEarly(b),completeLabel=early?'Complete Early':'Mark Completed';return `<article class="card"><div class="card-top"><div><h3>${esc(b.client_name)}</h3><div class="meta">${esc(b.session_date)} • ${hour(b.start_hour)}–${hour(b.end_hour)}<br>${b.participant_count} player${b.participant_count>1?'s':''} • ${money(total)}<br>${esc(b.contact||'No contact')}</div></div><div class="tag-stack"><span class="tag">${esc(b.session_status||'scheduled')}</span><span class="tag payment ${payState.toLowerCase()}">${payState}${bal?` • ${money(bal)} due`:''}</span></div></div><div class="card-actions">${!done?`<button class="mini confirm" data-complete="${b.id}">${completeLabel}</button>`:''}<button class="mini" data-payment="${b.id}">Record Payment</button><button class="mini confirm-card" data-confirmation="${b.id}">Confirmation PNG</button><button class="mini danger" data-cancel-booking="${b.id}">Cancel Booking</button></div></article>`}
-function renderBookings(all,todays){$('#todayBookings').innerHTML=todays.length?todays.map(b=>bookingCard(b,true)).join(''):'<div class="empty">No coaching sessions today.</div>';$('#bookings').innerHTML=all.length?all.map(b=>bookingCard(b,false)).join(''):'<div class="empty">No upcoming confirmed bookings.</div>';all.forEach(b=>{document.querySelectorAll(`[data-cancel-booking="${b.id}"]`).forEach(x=>x.onclick=()=>cancelBooking(b));document.querySelectorAll(`[data-payment="${b.id}"]`).forEach(x=>x.onclick=()=>openPayment(b));document.querySelectorAll(`[data-complete="${b.id}"]`).forEach(x=>x.onclick=()=>setSessionStatus(b,'completed'))})}
+function bookingCard(b,todayMode=false){
+  const paid=Number(b.paid??paymentTotals.get(b.id)??0),total=Number(b.total_amount||0),bal=Math.max(0,total-paid),payState=bal<=0?'Paid':paid>0?'Partial':'Unpaid',done=b.session_status==='completed',early=!done&&isSessionEarly(b),completeLabel=early?'Complete Early':'Mark Completed';
+  const completionBtn=!done?`<button class="mini confirm" data-complete="${b.id}">${completeLabel}</button>`:'';
+  const paymentBtn=bal>0?`<button class="mini" data-payment="${b.id}">Record Payment</button>`:'';
+  return `<article class="card"><div class="card-top"><div><h3>${esc(b.client_name)}</h3><div class="meta">${esc(b.session_date)} • ${hour(b.start_hour)}–${hour(b.end_hour)}<br>${b.participant_count} player${b.participant_count>1?'s':''} • ${money(total)}<br>${esc(b.contact||'No contact')}</div></div><div class="tag-stack"><span class="tag">${esc(b.session_status||'scheduled')}</span><span class="tag payment ${payState.toLowerCase()}">${payState}${bal?` • ${money(bal)} due`:''}</span></div></div><div class="card-actions">${completionBtn}${paymentBtn}<button class="mini confirm-card" data-confirmation="${b.id}">Confirmation PNG</button><button class="mini danger" data-cancel-booking="${b.id}">Cancel Booking</button></div></article>`;
+}
+function renderBookings(upcoming,todays){
+  $('#todayBookings').innerHTML=todays.length?todays.map(b=>bookingCard(b,true)).join(''):'<div class="empty">No coaching sessions need attention today.</div>';
+  $('#bookings').innerHTML=upcoming.length?upcoming.map(b=>bookingCard(b,false)).join(''):'<div class="empty">No upcoming confirmed bookings.</div>';
+  [...upcoming,...todays].forEach(b=>{
+    document.querySelectorAll(`[data-cancel-booking="${b.id}"]`).forEach(x=>x.onclick=()=>cancelBooking(b));
+    document.querySelectorAll(`[data-payment="${b.id}"]`).forEach(x=>x.onclick=()=>openPayment(b));
+    document.querySelectorAll(`[data-complete="${b.id}"]`).forEach(x=>x.onclick=()=>setSessionStatus(b,'completed'));
+  });
+}
 async function setSessionStatus(b,status){
   const keepScroll=window.scrollY;
   if(status==='completed'){
@@ -38,7 +79,7 @@ async function setSessionStatus(b,status){
   const {error}=await db.from('bookings').update({session_status:status,session_closed_at:status==='completed'?new Date().toISOString():null}).eq('id',b.id);
   if(error)return toast(error.message);
   toast(status==='completed'?'Session marked completed. Earned Income will update.':'Session updated.');
-  await Promise.all([loadBookings(),loadPaymentFollowups(),loadClients()]);
+  await Promise.all([loadBookings(),loadPaymentFollowups(),loadCompletedSessions(),loadClients()]);
   window.dispatchEvent(new CustomEvent('coach:data-changed',{detail:{type:'session-status',bookingId:b.id,status}}));
   requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:keepScroll,left:0,behavior:'auto'})));
 }
@@ -46,7 +87,7 @@ function openPayment(b){activePaymentBooking=b;const paid=paymentTotals.get(b.id
 async function loadPaymentFollowups(){
   const list=$('#paymentFollowupList'),count=$('#paymentFollowupCount');
   if(!list)return;
-  const {data:bookings,error}=await db.from('bookings').select('*').eq('status','confirmed').eq('session_status','completed').order('session_date',{ascending:false}).order('start_hour',{ascending:false}).limit(120);
+  const today=ymd(new Date());const {data:bookings,error}=await db.from('bookings').select('*').eq('status','confirmed').eq('session_status','completed').lt('session_date',today).order('session_date',{ascending:false}).order('start_hour',{ascending:false}).limit(120);
   if(error){list.innerHTML=`<div class="empty">${esc(error.message)}</div>`;if(count)count.textContent='0';return}
   const ids=(bookings||[]).map(b=>b.id),paidMap=new Map();
   if(ids.length){
@@ -63,6 +104,29 @@ async function loadPaymentFollowups(){
   rows.forEach(b=>document.querySelector(`[data-followup-payment="${b.id}"]`)?.addEventListener('click',()=>{paymentTotals.set(b.id,b.paid);openPayment(b)}));
 }
 
+async function loadCompletedSessions(){
+  const list=$('#completedSessionsList'),count=$('#completedSessionsCount'),toggle=$('#toggleCompletedSessions');
+  if(!list)return;
+  const today=ymd(new Date());
+  let q=db.from('bookings').select('*').eq('status','confirmed').eq('session_status','completed').order('session_date',{ascending:false}).order('start_hour',{ascending:false}).limit(300);
+  if(!showAllCompleted)q=q.eq('session_date',today);
+  const {data:bookings,error}=await q;
+  if(error){list.innerHTML=`<div class="empty">${esc(error.message)}</div>`;if(count)count.textContent='0';return}
+  const ids=(bookings||[]).map(b=>b.id),paidMap=new Map();
+  if(ids.length){
+    const {data:p,error:pe}=await db.from('booking_payments').select('booking_id,amount').in('booking_id',ids);
+    if(pe){list.innerHTML=`<div class="empty">${esc(pe.message)}</div>`;if(count)count.textContent='0';return}
+    (p||[]).forEach(x=>paidMap.set(x.booking_id,(paidMap.get(x.booking_id)||0)+Number(x.amount||0)));
+  }
+  const rows=(bookings||[]).map(b=>{
+    const paid=paidMap.get(b.id)||0,total=Number(b.total_amount||0);
+    return {...b,paid,balance:Math.max(0,total-paid)};
+  }).filter(b=>b.balance<=0.001);
+  if(count)count.textContent=String(rows.length);
+  if(toggle)toggle.textContent=showAllCompleted?'Show Today Only':'Show All Completed';
+  list.innerHTML=rows.length?rows.map(b=>`<article class="card completed-session-card"><div class="card-top"><div><h3>${esc(b.client_name)}</h3><div class="meta">${esc(b.session_date)} • ${hour(b.start_hour)}–${hour(b.end_hour)}<br>${b.participant_count||1} player${Number(b.participant_count||1)>1?'s':''} • ${money(b.total_amount)} collected</div></div><div class="tag-stack"><span class="tag">completed</span><span class="tag payment paid">Paid</span></div></div><div class="card-actions"><button class="mini confirm-card" data-confirmation="${b.id}">Confirmation PNG</button></div></article>`).join(''):`<div class="empty">${showAllCompleted?'No fully settled completed sessions yet.':'No fully settled completed sessions today.'}</div>`;
+}
+$('#toggleCompletedSessions')?.addEventListener('click',()=>{showAllCompleted=!showAllCompleted;loadCompletedSessions()});
 $('#savePaymentBtn').onclick=savePayment;
 async function savePayment(){
   const b=activePaymentBooking;if(!b)return;
