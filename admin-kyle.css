@@ -202,3 +202,8 @@
 .block-public-toggle{display:flex!important;grid-template-columns:auto 1fr!important;align-items:center;gap:9px;margin-top:14px!important;text-transform:none!important;letter-spacing:0!important;font-size:12px!important;color:#bbb!important}
 .block-public-toggle input{width:auto!important}
 @media(max-width:620px){.booking-head-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.booking-head-actions button{width:100%}}
+
+.completed-head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.completed-session-card{border-color:#23452f}
+.completed-session-card .tag.payment.paid{background:#11371e;color:#8cffab}
+@media(max-width:620px){.completed-head-actions{width:100%;justify-content:space-between}}
