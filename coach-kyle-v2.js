@@ -8,7 +8,7 @@
 
   let selectedStart=null,selectedEnd=null,scheduleMap=new Map();
 
-  const dateInput=$('#date'),startSlots=$('#startSlots'),endSlots=$('#endSlots'),players=$('#players'),status=$('#availabilityStatus'),summary=$('#requestSummary');
+  const dateInput=$('#date'),slots=$('#hourSlots'),players=$('#players'),status=$('#availabilityStatus'),summary=$('#requestSummary');
   const db=window.supabase?.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey);
 
   function nav(){
@@ -47,69 +47,64 @@
 
   function slotStatus(h){return scheduleMap.get(`${dateInput.value}|${h}`)||'available'}
   function isSlotOpen(h){return h>=CONFIG.startHour&&h<CONFIG.endHour&&slotStatus(h)==='available'}
+  function isSelected(h){return selectedStart!==null&&selectedEnd!==null&&h>=selectedStart&&h<selectedEnd}
 
-  function maxEndFrom(start){
-    let end=start;
-    for(let h=start;h<CONFIG.endHour;h++){
-      if(!isSlotOpen(h))break;
-      end=h+1;
+  function chooseHour(h){
+    if(!isSlotOpen(h))return;
+
+    if(selectedStart===null||selectedEnd===null){
+      selectedStart=h;
+      selectedEnd=h+1;
+    }else if(isSelected(h)){
+      const dur=durationHours();
+      if(dur===1){
+        selectedStart=null;
+        selectedEnd=null;
+      }else if(h===selectedStart){
+        selectedStart++;
+      }else if(h===selectedEnd-1){
+        selectedEnd--;
+      }else{
+        selectedStart=h;
+        selectedEnd=h+1;
+      }
+    }else if(h===selectedStart-1){
+      selectedStart=h;
+    }else if(h===selectedEnd){
+      selectedEnd=h+1;
+    }else{
+      selectedStart=h;
+      selectedEnd=h+1;
     }
-    return end;
+
+    renderSlots();
+    updateSummary();
+    const dur=durationHours();
+    if(dur){
+      status.className='status ok';
+      status.textContent=`${dur} hour${dur>1?'s':''} selected • ${hourName(selectedStart)} to ${hourName(selectedEnd)}.`;
+    }else{
+      status.className='status ok';
+      status.textContent='No hours selected. Tap an available hour to begin.';
+    }
   }
 
-  function renderStartSlots(){
-    startSlots.innerHTML='';
+  function renderSlots(){
+    slots.innerHTML='';
     for(let h=CONFIG.startHour;h<CONFIG.endHour;h++){
       const st=slotStatus(h),b=document.createElement('button');
       b.type='button';
-      b.className='slot time-point';
-      b.innerHTML=`<span class="slot-time">${shortHour(h)}</span>${st==='booked'?'<small>Booked</small>':st==='unavailable'?'<small>Blocked</small>':'<small>Available</small>'}`;
+      b.className='slot hour-select-slot';
+      b.innerHTML=`<span class="slot-time">${shortHour(h)} to ${shortHour(h+1)}</span>${st==='booked'?'<small>Booked</small>':st==='unavailable'?'<small>Blocked</small>':'<small>Available</small>'}`;
+
       if(st==='booked'||st==='unavailable'){
         b.disabled=true;
         b.classList.add(st==='booked'?'booked':'blocked');
       }else{
-        if(selectedStart===h)b.classList.add('selected','start-selected');
-        if(selectedStart!==null&&selectedEnd!==null&&h>=selectedStart&&h<selectedEnd)b.classList.add('range-selected');
-        b.onclick=()=>{
-          selectedStart=h;
-          selectedEnd=null;
-          renderStartSlots();
-          renderEndSlots();
-          updateSummary();
-          status.className='status ok';
-          status.textContent=`Start selected: ${hourName(h)}. Now choose your end time.`;
-        };
+        if(isSelected(h))b.classList.add('selected','range-selected');
+        b.onclick=()=>chooseHour(h);
       }
-      startSlots.appendChild(b);
-    }
-  }
-
-  function renderEndSlots(){
-    endSlots.innerHTML='';
-    if(selectedStart===null){
-      endSlots.innerHTML='<div class="end-time-hint">Select a start time first.</div>';
-      return;
-    }
-    const maxEnd=maxEndFrom(selectedStart);
-    if(maxEnd<=selectedStart){
-      endSlots.innerHTML='<div class="end-time-hint">No valid end time is available from this start.</div>';
-      return;
-    }
-    for(let h=selectedStart+1;h<=maxEnd;h++){
-      const b=document.createElement('button');
-      b.type='button';
-      b.className='slot end-time-slot';
-      b.innerHTML=`<span class="slot-time">${shortHour(h)}</span><small>${h-selectedStart} hr${h-selectedStart>1?'s':''}</small>`;
-      if(selectedEnd===h)b.classList.add('selected');
-      b.onclick=()=>{
-        selectedEnd=h;
-        renderStartSlots();
-        renderEndSlots();
-        updateSummary();
-        status.className='status ok';
-        status.textContent=`${hourName(selectedStart)} to ${hourName(selectedEnd)} selected • ${durationHours()} hour${durationHours()>1?'s':''}.`;
-      };
-      endSlots.appendChild(b);
+      slots.appendChild(b);
     }
   }
 
@@ -119,26 +114,26 @@
     status.className='status';
     status.textContent='Checking live availability…';
     scheduleMap=new Map();
-    renderStartSlots();
-    renderEndSlots();
+    renderSlots();
 
     if(!db){
       status.className='status warn';
       status.textContent='Live schedule could not load. You can still send Coach Kyle a request through Messenger.';
       return;
     }
+
     try{
       const {data,error}=await db.from('public_schedule').select('slot_date,start_hour,status').eq('slot_date',dateInput.value);
       if(error)throw error;
       (data||[]).forEach(r=>scheduleMap.set(`${r.slot_date}|${Number(r.start_hour)}`,r.status));
-      renderStartSlots();
-      renderEndSlots();
+      renderSlots();
       const open=[...Array(CONFIG.endHour-CONFIG.startHour)].filter((_,i)=>isSlotOpen(CONFIG.startHour+i)).length;
       status.className=open?'status ok':'status warn';
-      status.textContent=open?`${open} coaching hour${open===1?'':'s'} currently open. Choose your start time, then choose your end time.`:'No open coaching hours on this date. Choose another date.';
+      status.textContent=open
+        ? `${open} coaching hour${open===1?'':'s'} currently open. Tap one or more consecutive available hours.`
+        : 'No open coaching hours on this date. Choose another date.';
     }catch(e){
-      renderStartSlots();
-      renderEndSlots();
+      renderSlots();
       status.className='status warn';
       status.textContent='Live schedule is temporarily unavailable. You can still send Coach Kyle a request and he will confirm it.';
     }
@@ -180,11 +175,15 @@
   function updateSummary(){
     const f=getForm(),parts=[];
     if(f.date)parts.push(f.date);
-    if(f.start!==null&&f.end!==null)parts.push(`${hourName(f.start)}–${hourName(f.end)}`);
-    else if(f.start!==null)parts.push(`Start: ${hourName(f.start)}`);
+    if(f.duration>0){
+      parts.push(`${hourName(f.start)}–${hourName(f.end)}`);
+      parts.push(`${f.duration} hr${f.duration>1?'s':''}`);
+    }else{
+      parts.push('No hours selected');
+    }
     parts.push(`${f.players} player${f.players>1?'s':''}`);
     parts.push(`₱${hourlyRate().toLocaleString('en-PH')}/hr`);
-    if(f.duration>0)parts.push(`${f.duration} hr${f.duration>1?'s':''} • ₱${totalFee().toLocaleString('en-PH')} total`);
+    if(f.duration>0)parts.push(`₱${totalFee().toLocaleString('en-PH')} total`);
     summary.innerHTML=`<strong>Current request</strong><br>${parts.join(' • ')}`;
   }
 
@@ -209,9 +208,8 @@
     const f=getForm();
     if(f.players<1||f.players>CONFIG.maxPlayers){alert(`Maximum ${CONFIG.maxPlayers} players per session.`);return false}
     if(!splitName(f.name)){alert('Please enter the booking name (first name and last name).');$('#name').focus();return false}
-    if(f.start===null){alert('Please choose a start time.');return false}
-    if(f.end===null){alert('Please choose an end time.');return false}
-    if(!selectedRangeAvailable()){alert('One or more hours in this session are no longer available. Please choose another time range.');return false}
+    if(f.duration<1){alert('Please select at least one available hour.');return false}
+    if(!selectedRangeAvailable()){alert('One or more selected hours are no longer available. Please choose another time range.');return false}
     return true;
   }
 
@@ -229,6 +227,7 @@
     const f=getForm(),text=message(),btn=$('#sendRequest'),old=btn.textContent;
     btn.disabled=true;btn.textContent='Sending…';
     let sent=false;
+
     if(db){
       try{
         const type=f.players===1?'1-on-1':`${f.players} Players`;
@@ -248,6 +247,7 @@
         if(!error)sent=true; else console.warn(error);
       }catch(e){console.warn(e)}
     }
+
     if(sent){
       status.className='status ok';
       status.textContent='Request sent to Coach Kyle Admin. Your schedule is subject to confirmation.';
@@ -263,7 +263,10 @@
   }
 
   function wire(){
-    nav();buildPlayerOptions();minDate();renderStartSlots();renderEndSlots();
+    nav();
+    buildPlayerOptions();
+    minDate();
+    renderSlots();
     dateInput.addEventListener('change',loadAvailability);
     players.addEventListener('change',updateSummary);
     ['name','contact','goal'].forEach(id=>$('#'+id).addEventListener('input',updateSummary));
@@ -271,7 +274,8 @@
     $('#sendRequest').onclick=sendRequest;
     $('#scrollBooking').onclick=()=>$('#booking').scrollIntoView({behavior:'smooth'});
     $('#scrollRates').onclick=()=>$('#rates').scrollIntoView({behavior:'smooth'});
-    loadAvailability();updateSummary();
+    loadAvailability();
+    updateSummary();
   }
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',wire,{once:true});else wire();
