@@ -263,10 +263,7 @@
   }
 
   function wire(){
-    nav();
-    buildPlayerOptions();
-    minDate();
-    renderSlots();
+    nav();buildPlayerOptions();minDate();renderSlots();
     dateInput.addEventListener('change',loadAvailability);
     players.addEventListener('change',updateSummary);
     ['name','contact','goal'].forEach(id=>$('#'+id).addEventListener('input',updateSummary));
@@ -274,8 +271,7 @@
     $('#sendRequest').onclick=sendRequest;
     $('#scrollBooking').onclick=()=>$('#booking').scrollIntoView({behavior:'smooth'});
     $('#scrollRates').onclick=()=>$('#rates').scrollIntoView({behavior:'smooth'});
-    loadAvailability();
-    updateSummary();
+    loadAvailability();updateSummary();
   }
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',wire,{once:true});else wire();
