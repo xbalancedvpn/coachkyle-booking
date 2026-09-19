@@ -55,7 +55,12 @@
     if(!submittedSignature)return;
     submittedSignature=null;
     const btn=$('#sendRequest');
-    if(btn){btn.disabled=false;btn.classList.remove('request-sent');btn.textContent='Send Request'}
+    if(btn){
+      btn.disabled=false;
+      btn.classList.remove('request-sent');
+      btn.textContent='Send Request';
+      btn.onclick=sendRequest;
+    }
   }
 
   function requestSignature(){
@@ -278,11 +283,13 @@
       btn.classList.add('request-sent');
       btn.textContent='✓ Request Sent';
     }else{
-      await copyText(text);
       status.className='status warn';
-      status.textContent='Direct request could not be saved, so the booking details were copied. Opening Messenger now.';
-      window.open(CONFIG.facebook,'_blank','noopener');
-      btn.disabled=false;btn.textContent=old;
+      status.textContent='Could not send this request to Coach Kyle Admin. Please try Send Request again, or use Copy & Open Messenger if you prefer.';
+      submittedSignature=null;
+      btn.disabled=false;
+      btn.classList.remove('request-sent');
+      btn.textContent='Send Request';
+      btn.onclick=sendRequest;
     }
   }
 
