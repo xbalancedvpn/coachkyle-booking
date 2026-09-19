@@ -6,7 +6,7 @@
   const hourName=h=>`${h%12||12}:00 ${h<12?'AM':'PM'}`;
   const shortHour=h=>`${h%12||12}${h<12?'am':'pm'}`;
 
-  let selectedStart=null,selectedEnd=null,scheduleMap=new Map();
+  let selectedStart=null,selectedEnd=null,scheduleMap=new Map(),submittedSignature=null;
 
   const dateInput=$('#date'),slots=$('#hourSlots'),players=$('#players'),status=$('#availabilityStatus'),summary=$('#requestSummary');
   const db=window.supabase?.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey);
@@ -49,8 +49,21 @@
   function isSlotOpen(h){return h>=CONFIG.startHour&&h<CONFIG.endHour&&slotStatus(h)==='available'}
   function isSelected(h){return selectedStart!==null&&selectedEnd!==null&&h>=selectedStart&&h<selectedEnd}
 
+  function resetSubmittedRequest(){
+    if(!submittedSignature)return;
+    submittedSignature=null;
+    const btn=$('#sendRequest');
+    if(btn){btn.disabled=false;btn.classList.remove('request-sent');btn.textContent='Send Request'}
+  }
+
+  function requestSignature(){
+    const f=getForm();
+    return JSON.stringify([f.name,f.contact,f.date,f.start,f.end,f.players,f.goal]);
+  }
+
   function chooseHour(h){
     if(!isSlotOpen(h))return;
+    resetSubmittedRequest();
 
     if(selectedStart===null||selectedEnd===null){
       selectedStart=h;
@@ -102,7 +115,7 @@
       const st=slotStatus(h),b=document.createElement('button');
       b.type='button';
       b.className='slot hour-select-slot';
-      b.innerHTML=`<span class="slot-time">${shortHour(h)} to ${shortHour(h+1)}</span>${st==='booked'?'<small>Booked</small>':st==='unavailable'?'<small>Blocked</small>':'<small>Available</small>'}`;
+      b.innerHTML=`<span class="slot-time">${shortHour(h)} to ${shortHour(h+1)}</span>${st==='booked'?'<small>Booked</small>':st==='unavailable'?'<small>Coach Unavailable</small>':'<small>Available</small>'}`;
 
       if(st==='booked'||st==='unavailable'){
         b.disabled=true;
@@ -176,7 +189,7 @@
     if(!f.name||!f.date||f.start===null||f.end===null)return '';
     const d=new Date(`${f.date}T00:00:00`);
     const nice=d.toLocaleDateString('en-PH',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-    return `Hi Coach Kyle! I would like to request a pickleball coaching session.\n\nBooking Name: ${f.name}\nContact: ${f.contact||'Not provided'}\nDate: ${nice}\nTime: ${hourName(f.start)} - ${hourName(f.end)}\nDuration: ${f.duration} hour${f.duration>1?'s':''}\nPax: ${f.players}\nHourly Coaching Rate: ₱${hourlyRate().toLocaleString('en-PH')}\nEstimated Coaching Fee: ₱${totalFee().toLocaleString('en-PH')}\nGoal: ${f.goal||'General coaching'}\nCourt Fee: Not included\n\nPlease confirm if this schedule is available. Thank you!`;
+    return `Hi Coach Kyle! I would like to request a pickleball coaching session.\n\nBooking Name: ${f.name}\nContact: ${f.contact||'Not provided'}\nDate: ${nice}\nTime: ${hourName(f.start)} - ${hourName(f.end)}\nDuration: ${f.duration} hour${f.duration>1?'s':''}\nPax: ${f.players}\nHourly Coaching Rate: ₱${hourlyRate().toLocaleString('en-PH')}\nEstimated Coaching Fee: ₱${totalFee().toLocaleString('en-PH')}\nGoal: ${f.goal||'General coaching'}\nCourt Fee: Not included\nRequest Code: CKREQ|${f.date}|${f.start}|${f.end}|${f.players}\n\nPlease confirm if this schedule is available. Thank you!`;
   }
 
   function updateSummary(){
@@ -258,8 +271,10 @@
     if(sent){
       status.className='status ok';
       status.textContent='Request sent to Coach Kyle Admin. Your schedule is subject to confirmation.';
-      btn.textContent='Request Sent';
-      setTimeout(()=>{btn.disabled=false;btn.textContent=old},2500);
+      submittedSignature=requestSignature();
+      btn.disabled=true;
+      btn.classList.add('request-sent');
+      btn.textContent='✓ Request Sent';
     }else{
       await copyText(text);
       status.className='status warn';
@@ -271,9 +286,9 @@
 
   function wire(){
     nav();buildPlayerOptions();minDate();renderSlots();
-    dateInput.addEventListener('change',loadAvailability);
-    players.addEventListener('change',updateSummary);
-    ['name','contact','goal'].forEach(id=>$('#'+id).addEventListener('input',updateSummary));
+    dateInput.addEventListener('change',()=>{resetSubmittedRequest();loadAvailability()});
+    players.addEventListener('change',()=>{resetSubmittedRequest();updateSummary()});
+    ['name','contact','goal'].forEach(id=>$('#'+id).addEventListener('input',()=>{resetSubmittedRequest();updateSummary()}));
     $('#copyMessenger').onclick=copyAndOpen;
     $('#sendRequest').onclick=sendRequest;
     $('#scrollBooking').onclick=()=>$('#booking').scrollIntoView({behavior:'smooth'});
