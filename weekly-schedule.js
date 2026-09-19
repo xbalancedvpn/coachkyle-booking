@@ -34,17 +34,25 @@ ctx.textAlign='left';const footY=1262;ctx.fillStyle='#86df9d';ctx.beginPath();ct
 state.counts=counts;return canvas}
 async function generate(){const btn=$('#generateWeeklySchedule'),old=btn.textContent;btn.disabled=true;btn.textContent='Generating…';try{const picked=$('#weeklyStart').value;if(picked)setWeek(parseDate(picked));state.rows=await fetchWeek();const canvas=await drawCard(state.rows);state.blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png',1));$('#weeklySummary').innerHTML=`<strong>${state.counts.available}</strong> available hours • ${state.counts.unavailable} unavailable • ${state.counts.past} past`;$('#weeklyScheduleDialog').showModal()}catch(e){console.error(e);toast(e.message||'Could not generate weekly schedule.')}finally{btn.disabled=false;btn.textContent=old}}
 function fileName(){return `coach-kyle-weekly-schedule-${ymd(state.monday)}-to-${ymd(state.sunday)}.png`}
-function isAndroid(){return /Android/i.test(navigator.userAgent||'')}
 function blobToDataUrl(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error||new Error('Could not prepare image.'));r.readAsDataURL(blob)})}
 async function directSave(blob,name){
   if(!blob)return false;
-  const file=new File([blob],name,{type:'image/png'});
-  if(isAndroid()&&navigator.canShare?.({files:[file]})){
-    try{toast('Choose Files, Photos, or your file manager to save the PNG.');await navigator.share({title:'Save Coach Kyle Weekly Schedule',files:[file]});return true}
-    catch(e){if(e?.name==='AbortError')return true;console.warn(e)}
+  try{
+    const dataUrl=await blobToDataUrl(blob),a=document.createElement('a');
+    a.href=dataUrl;
+    a.download=name;
+    a.rel='noopener';
+    a.style.display='none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>a.remove(),1200);
+    toast('PNG download started.');
+    return true;
+  }catch(e){
+    console.warn(e);
+    toast('Direct download was blocked by this browser. Use Share instead.');
+    return false;
   }
-  try{if(!isAndroid()&&window.showSaveFilePicker){const handle=await window.showSaveFilePicker({suggestedName:name,types:[{description:'PNG image',accept:{'image/png':['.png']}}]});const writable=await handle.createWritable();await writable.write(blob);await writable.close();toast('Weekly schedule saved.');return true}}catch(e){if(e?.name==='AbortError')return true;console.warn(e)}
-  try{const dataUrl=await blobToDataUrl(blob),a=document.createElement('a');a.href=dataUrl;a.download=name;a.style.display='none';document.body.appendChild(a);a.click();setTimeout(()=>a.remove(),1000);toast('PNG download started.');return true}catch(e){console.warn(e);toast('Could not download directly. Use Share to save the PNG.');return false}
 }
 async function shareCard(){if(!state.blob)return;const file=new File([state.blob],fileName(),{type:'image/png'}),text=`Coach Kyle weekly coaching availability • ${rangeLabel(state.monday,state.sunday)}
 Book: https://coachkyle.xbalanced.net`;if(navigator.canShare?.({files:[file]})){try{await navigator.share({title:'Coach Kyle Weekly Schedule',text,files:[file]});return}catch(e){if(e?.name==='AbortError')return}}toast('Sharing is not supported here. Use Save PNG instead.')}
