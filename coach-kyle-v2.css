@@ -56,3 +56,32 @@
 @media(max-width:760px){.booking-steps{grid-template-columns:1fr}.booking-step{padding:18px}}
 
 #sendRequest.request-sent{background:#198754!important;border-color:#198754!important;color:#fff!important;cursor:not-allowed;opacity:1}
+
+.hidden-request-action{display:none!important}
+.start-new-request{margin-top:10px;width:100%;border:0;background:transparent;color:#666;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.footer-brand{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.xbalanced-credit{color:#666;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.calendar-card,.request-card,.booking-step,.rate-card{min-width:0}
+.request-actions .btn,.contact-links a{min-width:0;max-width:100%;white-space:normal;text-align:center;overflow-wrap:anywhere}
+.field input,.field select,.field textarea{min-width:0;max-width:100%;box-sizing:border-box}
+@media(max-width:520px){
+  .section{padding-left:14px;padding-right:14px}
+  .calendar-card,.request-card{padding:15px;border-radius:15px}
+  .slot-grid{grid-template-columns:1fr 1fr;gap:6px}
+  .slot{padding:10px 5px;min-width:0}
+  .slot .slot-time{font-size:12px;white-space:normal}
+  .slot small{font-size:9px;overflow-wrap:anywhere}
+  .request-actions{grid-template-columns:1fr}
+  .request-actions .btn{width:100%;font-size:13px;padding-left:10px;padding-right:10px}
+  .footer{align-items:stretch}
+  .footer-brand{flex-direction:column;align-items:flex-start;gap:9px}
+  .xbalanced-credit{line-height:1.45}
+}
+@media(max-width:360px){
+  .site-header{padding-left:12px;padding-right:12px}
+  .hero-content{padding-left:16px;padding-right:16px}
+  .section{padding-left:10px;padding-right:10px}
+  .calendar-card,.request-card{padding:12px}
+  .slot-grid{grid-template-columns:1fr}
+  .contact-bar{padding-left:14px;padding-right:14px}
+}
