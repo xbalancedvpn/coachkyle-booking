@@ -257,8 +257,8 @@ function init(){
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadNotifications()});
   window.addEventListener('coach:data-changed',()=>{loadNotifications();if(reportRows.length)loadReport()});
   document.addEventListener('click',e=>{
-    if(e.target.closest('[data-confirm],[data-wait],[data-cancel],[data-payment],[data-complete],#savePaymentBtn,#confirmBookingBtn,#completeSessionBtn,#saveManualBooking')){
-      setTimeout(()=>{loadNotifications();if(reportRows.length)loadReport()},700);
+    if(e.target.closest('[data-confirm],[data-wait],[data-cancel],#completeSessionBtn,#saveManualBooking')){
+      setTimeout(()=>{loadNotifications();if(reportRows.length)loadReport()},900);
     }
   });
 }
