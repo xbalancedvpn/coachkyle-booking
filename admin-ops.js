@@ -15,7 +15,7 @@ function paymentState(row){
   if(row.paid+0.001<row.total)return 'partial';
   return 'paid';
 }
-function isAdvance(row){return row.paid>0&&row.session_status!=='completed'&&row.session_date>=today()}
+function isAdvance(row){return row.paid>0&&row.session_status!=='completed'}
 function reportFilterMatch(row,filter){
   const state=paymentState(row);
   if(filter==='all')return true;
@@ -149,7 +149,7 @@ async function loadReport(){
     const all=reportRows,shown=all.filter(r=>reportFilterMatch(r,filter));
     const confirmedValue=all.reduce((s,r)=>s+r.total,0);
     const collected=all.reduce((s,r)=>s+r.paid,0);
-    const earned=all.filter(r=>r.session_status==='completed').reduce((s,r)=>s+Math.min(r.paid,r.total),0);
+    const earned=all.filter(r=>r.session_status==='completed').reduce((s,r)=>s+r.total,0);
     const outstanding=all.reduce((s,r)=>s+r.balance,0);
     const advance=all.filter(isAdvance).reduce((s,r)=>s+r.paid,0);
     const paidFull=all.filter(r=>paymentState(r)==='paid');
@@ -186,7 +186,7 @@ function barChart(canvas,labels,values,formatter=v=>String(v)){
 }
 function drawIncomeChart(rows,from,to){
   const map=new Map();
-  rows.forEach(r=>{if(r.session_status!=='completed')return;map.set(r.session_date,(map.get(r.session_date)||0)+Math.min(r.paid,r.total))});
+  rows.forEach(r=>{if(r.session_status!=='completed')return;map.set(r.session_date,(map.get(r.session_date)||0)+r.total)});
   const dates=[...map.keys()].sort(),labels=dates.length?dates:['No earned sessions'],vals=dates.length?dates.map(d=>map.get(d)):[0];
   barChart($('#incomeChart'),labels,vals,v=>money(v));
 }
