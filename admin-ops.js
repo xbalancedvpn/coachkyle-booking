@@ -62,7 +62,7 @@ async function loadNotifications(){
       parts.push(`<div class="notify-group"><h4>New inquiries <span>${inq.length}</span></h4>${inq.slice(0,6).map(x=>`<a href="#inquiriesSection"><strong>${esc(x.client_name)}</strong><small>${esc(x.preferred_date||'No date')} • ${x.start_hour==null?'No time':hour(x.start_hour)+'–'+hour(x.end_hour)}</small></a>`).join('')}</div>`);
     }
     if(unpaid.length){
-      parts.push(`<div class="notify-group"><h4>Completed • payment pending <span>${unpaid.length}</span></h4>${unpaid.slice(0,6).map(x=>`<a href="#reportsSection"><strong>${esc(x.client_name)}</strong><small>${esc(x.session_date)} • ${money(Number(x.total_amount||0)-x.paid)} due</small></a>`).join('')}</div>`);
+      parts.push(`<div class="notify-group"><h4>Completed • payment pending <span>${unpaid.length}</span></h4>${unpaid.slice(0,6).map(x=>`<a href="#payment-followup-${x.id}"><strong>${esc(x.client_name)}</strong><small>${esc(x.session_date)} • ${money(Number(x.total_amount||0)-x.paid)} due</small></a>`).join('')}</div>`);
     }
     list.innerHTML=parts.length?parts.join(''):'<div class="notify-empty">No items need attention.</div>';
     $('#attentionInquiries').textContent=String(inq?.length||0);
