@@ -28,6 +28,151 @@ async function setSessionStatus(b,status){if(status==='completed'&&!confirm(`Mar
 function openPayment(b){activePaymentBooking=b;const paid=paymentTotals.get(b.id)||0,total=Number(b.total_amount||0),bal=Math.max(0,total-paid);$('#paymentTitle').textContent=b.client_name;$('#paymentMeta').innerHTML=`${esc(b.session_date)} • ${hour(b.start_hour)}–${hour(b.end_hour)}`;$('#paymentTotal').textContent=money(total);$('#paymentPaid').textContent=money(paid);$('#paymentBalance').textContent=money(bal);$('#paymentAmount').value=bal||'';$('#paymentAmount').max=bal;$('#paymentDate').value=ymd(new Date());$('#paymentNote').value='';$('#paymentDialog').showModal()}
 $('#savePaymentBtn').onclick=savePayment;
 async function savePayment(){const b=activePaymentBooking;if(!b)return;const amount=Number($('#paymentAmount').value||0),paid=paymentTotals.get(b.id)||0,bal=Math.max(0,Number(b.total_amount||0)-paid);if(amount<=0)return toast('Enter a valid payment amount.');if(amount>bal)return toast('Payment cannot be greater than the remaining balance.');const {error}=await db.from('booking_payments').insert({booking_id:b.id,amount,paid_at:$('#paymentDate').value,payment_method:$('#paymentMethod').value,note:$('#paymentNote').value.trim()||null,source:'manual'});if(error)return toast(error.message);$('#paymentDialog').close();toast('Payment recorded.');loadBookings()}
+const manualBookingState={slots:new Map(),autoAmount:0,rateOverridden:false};
+function manualBookingRate(players){const n=Math.max(1,Number(players)||1);return 500+((n-1)*200)}
+function manualBookingDuration(){const s=Number($('#manualBookingStart')?.value),e=Number($('#manualBookingEnd')?.value);return Number.isFinite(s)&&Number.isFinite(e)&&e>s?e-s:0}
+function renderManualParticipantFields(){
+  const n=Math.max(1,Number($('#manualBookingPlayers')?.value)||1),wrap=$('#manualParticipantFields');
+  if(!wrap)return;
+  if(n<=1){wrap.innerHTML='';return}
+  let html='<div class="confirm-meta">Additional player names are optional. Add them if you want individual client profiles/history.</div>';
+  for(let i=2;i<=n;i++)html+=`<label class="manual-participant-row"><span>${i}</span><input type="text" maxlength="120" data-manual-participant="${i}" placeholder="Player ${i} name (optional)"></label>`;
+  wrap.innerHTML=html;
+}
+function buildManualPlayerOptions(){
+  const el=$('#manualBookingPlayers');if(!el)return;
+  el.innerHTML='';
+  for(let i=1;i<=12;i++){const o=document.createElement('option');o.value=String(i);o.textContent=i===1?'1 player (1-on-1)':`${i} players`;el.appendChild(o)}
+  el.value='1';
+}
+function refreshManualClientOptions(){
+  const sel=$('#manualBookingClient');if(!sel)return;
+  const current=sel.value;
+  sel.innerHTML='<option value="">New client / not yet listed</option>'+clientCache.map(c=>`<option value="${esc(c.id)}">${esc(c.full_name)}${c.contact?' • '+esc(c.contact):''}</option>`).join('');
+  if([...sel.options].some(o=>o.value===current))sel.value=current;
+}
+function manualSlotStatus(h){return manualBookingState.slots.get(Number(h))||'available'}
+async function loadManualBookingAvailability(){
+  const date=$('#manualBookingDate')?.value,start=$('#manualBookingStart'),end=$('#manualBookingEnd'),msg=$('#manualBookingAvailability');
+  if(!date||!start||!end||!msg)return;
+  start.innerHTML='<option value="">Loading…</option>';end.innerHTML='<option value="">Choose start time first</option>';end.disabled=true;
+  const {data,error}=await db.from('schedule_slots').select('start_hour,status').eq('slot_date',date).order('start_hour');
+  if(error){msg.className='manual-availability warn';msg.textContent=error.message;return}
+  manualBookingState.slots=new Map((data||[]).map(r=>[Number(r.start_hour),r.status]));
+  const open=[];for(let h=8;h<22;h++)if(manualSlotStatus(h)==='available')open.push(h);
+  start.innerHTML='<option value="">Choose start time</option>'+open.map(h=>`<option value="${h}">${hour(h)}</option>`).join('');
+  msg.className='manual-availability '+(open.length?'ok':'warn');
+  msg.textContent=open.length?`${open.length} available hour${open.length>1?'s':''} on this date. Choose a start time.`:'No available coaching hours on this date.';
+  updateManualBookingEndOptions();updateManualBookingSummary();
+}
+function updateManualBookingEndOptions(){
+  const startEl=$('#manualBookingStart'),endEl=$('#manualBookingEnd'),msg=$('#manualBookingAvailability');
+  if(!startEl||!endEl)return;
+  const s=Number(startEl.value);
+  endEl.innerHTML='';
+  if(!Number.isFinite(s)||!startEl.value){endEl.innerHTML='<option value="">Choose start time first</option>';endEl.disabled=true;updateManualBookingSummary();return}
+  const opts=[];
+  for(let h=s;h<22;h++){if(manualSlotStatus(h)!=='available')break;opts.push(h+1)}
+  endEl.innerHTML=opts.map(h=>`<option value="${h}">${hour(h)}</option>`).join('');
+  endEl.disabled=!opts.length;
+  if(opts.length)endEl.value=String(opts[0]);
+  if(msg){msg.className='manual-availability ok';msg.textContent=`Available continuously from ${hour(s)} to ${hour(opts[opts.length-1])}. End time cannot cross a booked or blocked hour.`}
+  syncManualAutoRate();
+}
+function syncManualAutoRate(force=false){
+  const players=Math.max(1,Number($('#manualBookingPlayers')?.value)||1),dur=manualBookingDuration(),auto=manualBookingRate(players)*dur;
+  manualBookingState.autoAmount=auto;
+  const amount=$('#manualBookingAmount'),hint=$('#manualBookingRateHint');
+  if(amount&&(!manualBookingState.rateOverridden||force)){amount.value=auto?String(auto):'';manualBookingState.rateOverridden=false}
+  if(hint)hint.textContent=dur?`Auto rate: ${money(manualBookingRate(players))}/hour × ${dur} hour${dur>1?'s':''} = ${money(auto)}`:'Choose start and end time to calculate the coaching fee.';
+  const payment=$('#manualBookingPayment');if(payment)payment.max=amount?.value||'0';
+  updateManualBookingSummary();
+}
+function updateManualBookingSummary(){
+  const box=$('#manualBookingSummary');if(!box)return;
+  const name=$('#manualBookingName')?.value.trim()||'Client',date=$('#manualBookingDate')?.value||'No date',s=$('#manualBookingStart')?.value,e=$('#manualBookingEnd')?.value,n=Number($('#manualBookingPlayers')?.value||1),amount=Number($('#manualBookingAmount')?.value||0),pay=Number($('#manualBookingPayment')?.value||0),dur=manualBookingDuration();
+  box.innerHTML=`<strong>${esc(name)}</strong><br>${esc(date)} • ${s&&e?hour(Number(s))+'–'+hour(Number(e)):'Choose time'} • ${dur||0} hour${dur===1?'':'s'}<br>${n} player${n>1?'s':''} • ${money(amount)} coaching fee${pay>0?' • '+money(pay)+' payment now':''}`;
+}
+function openManualBooking(){
+  const dlg=$('#manualBookingDialog');if(!dlg)return;
+  refreshManualClientOptions();buildManualPlayerOptions();renderManualParticipantFields();
+  $('#manualBookingForm').reset();
+  $('#manualBookingClient').value='';$('#manualBookingPlayers').value='1';
+  const now=ymd(new Date());$('#manualBookingDate').min=now;$('#manualBookingDate').value=now;$('#manualBookingPaymentDate').value=now;
+  manualBookingState.rateOverridden=false;manualBookingState.slots=new Map();
+  $('#manualBookingAmount').value='';$('#manualBookingPayment').value='0';
+  renderManualParticipantFields();loadManualBookingAvailability();dlg.showModal();
+}
+function closeManualBooking(){$('#manualBookingDialog')?.close()}
+async function saveManualBooking(e){
+  e?.preventDefault();
+  const btn=$('#saveManualBooking'),name=$('#manualBookingName').value.trim().replace(/\s+/g,' '),contact=$('#manualBookingContact').value.trim(),date=$('#manualBookingDate').value,start=Number($('#manualBookingStart').value),end=Number($('#manualBookingEnd').value),players=Math.max(1,Number($('#manualBookingPlayers').value)||1),amount=Number($('#manualBookingAmount').value||0),payment=Number($('#manualBookingPayment').value||0);
+  if(name.length<2)return toast('Enter the client name.');
+  if(!date||!Number.isFinite(start)||!Number.isFinite(end)||end<=start)return toast('Choose a valid date and time.');
+  if(amount<0)return toast('Enter a valid coaching fee.');
+  if(payment<0||payment>amount)return toast('Payment cannot be greater than the coaching fee.');
+  const old=btn.textContent;btn.disabled=true;btn.textContent='Creating…';
+  let bookingId=null;
+  try{
+    const {data:conflicts,error:ce}=await db.from('schedule_slots').select('start_hour,status').eq('slot_date',date).gte('start_hour',start).lt('start_hour',end).in('status',['booked','unavailable']);
+    if(ce)throw ce;if(conflicts?.length)throw new Error('One or more selected hours are no longer available. Please choose another time.');
+    const selectedClient=clientCache.find(x=>String(x.id)===String($('#manualBookingClient').value));
+    const primary=selectedClient||await findOrCreateClient({full_name:name,contact:contact||null});
+    const {data:b,error:be}=await db.from('bookings').insert({session_date:date,start_hour:start,end_hour:end,client_name:name,contact:contact||null,participant_count:players,coaching_type:players===1?'1-on-1':`${players} Players`,rate_mode:manualBookingState.rateOverridden?'manual_override':'standard',rate_per_person:players?amount/players:amount,total_amount:amount,notes:$('#manualBookingNote').value.trim()||null,status:'confirmed',session_status:'scheduled',client_id:primary.id}).select('id').single();
+    if(be)throw be;bookingId=b.id;
+    const pRows=[{booking_id:bookingId,client_id:primary.id,participant_order:1,first_name:primary.first_name||splitFullName(name).first,last_name:primary.last_name||splitFullName(name).last,full_name:name,contact:contact||null,contact_key:contact?contact.toLowerCase():null,is_primary:true}];
+    for(let i=2;i<=players;i++){
+      const raw=document.querySelector(`[data-manual-participant="${i}"]`)?.value.trim().replace(/\s+/g,' ');
+      if(!raw)continue;
+      const pc=await findOrCreateClient({full_name:raw,contact:null}),parts=splitFullName(raw);
+      pRows.push({booking_id:bookingId,client_id:pc.id,participant_order:i,first_name:pc.first_name||parts.first,last_name:pc.last_name||parts.last,full_name:raw,contact:null,contact_key:null,is_primary:false});
+    }
+    const {error:bpe}=await db.from('booking_participants').insert(pRows);if(bpe)throw bpe;
+    const rows=[];for(let h=start;h<end;h++)rows.push({slot_date:date,start_hour:h,status:'booked',client_name:name,contact:contact||null,coaching_type:players===1?'1-on-1':`${players} Players`,rate:amount,booking_id:bookingId});
+    const {error:se}=await db.from('schedule_slots').upsert(rows,{onConflict:'slot_date,start_hour'});if(se)throw se;
+    if(payment>0){
+      const paidAt=$('#manualBookingPaymentDate').value||ymd(new Date());
+      const {error:pe}=await db.from('booking_payments').insert({booking_id:bookingId,amount:payment,paid_at:paidAt,payment_method:$('#manualBookingPaymentMethod').value,note:'Recorded during manual booking',source:'manual'});
+      if(pe)throw pe;
+    }
+    closeManualBooking();
+    toast('Manual booking created and schedule blocked.');
+    await loadAll();
+    setTimeout(()=>document.querySelector(`[data-confirmation="${bookingId}"]`)?.click(),150);
+  }catch(err){
+    if(bookingId){
+      await db.from('booking_payments').delete().eq('booking_id',bookingId);
+      await db.from('schedule_slots').delete().eq('booking_id',bookingId);
+      await db.from('booking_participants').delete().eq('booking_id',bookingId);
+      await db.from('bookings').delete().eq('id',bookingId);
+    }
+    toast(err.message||'Could not create the manual booking.');
+    await loadManualBookingAvailability();
+  }finally{btn.disabled=false;btn.textContent=old}
+}
+function wireManualBooking(){
+  const form=$('#manualBookingForm');if(!form)return;
+  $('#openManualBookingBtn')?.addEventListener('click',openManualBooking);
+  $('#adminManualBookingLink')?.addEventListener('click',e=>{e.preventDefault();openManualBooking()});
+  $('#closeManualBooking')?.addEventListener('click',closeManualBooking);
+  $('#cancelManualBooking')?.addEventListener('click',closeManualBooking);
+  $('#manualBookingDate')?.addEventListener('change',loadManualBookingAvailability);
+  $('#manualBookingStart')?.addEventListener('change',updateManualBookingEndOptions);
+  $('#manualBookingEnd')?.addEventListener('change',()=>syncManualAutoRate());
+  $('#manualBookingPlayers')?.addEventListener('change',()=>{renderManualParticipantFields();syncManualAutoRate()});
+  $('#manualBookingName')?.addEventListener('input',updateManualBookingSummary);
+  $('#manualBookingPayment')?.addEventListener('input',updateManualBookingSummary);
+  $('#manualBookingAmount')?.addEventListener('input',()=>{manualBookingState.rateOverridden=Number($('#manualBookingAmount').value||0)!==manualBookingState.autoAmount;updateManualBookingSummary()});
+  $('#resetManualBookingRate')?.addEventListener('click',()=>syncManualAutoRate(true));
+  $('#manualBookingClient')?.addEventListener('change',()=>{
+    const row=clientCache.find(x=>String(x.id)===String($('#manualBookingClient').value));
+    if(row){$('#manualBookingName').value=row.full_name||'';$('#manualBookingContact').value=row.contact||''}else{$('#manualBookingName').value='';$('#manualBookingContact').value=''}
+    updateManualBookingSummary();
+  });
+  form.addEventListener('submit',saveManualBooking);
+}
+wireManualBooking();
+
 async function cancelBooking(b){if(!confirm(`Cancel booking for ${b.client_name}?`))return;const {error}=await db.from('bookings').update({status:'cancelled',session_status:'cancelled',cancelled_at:new Date().toISOString()}).eq('id',b.id);if(error)return toast(error.message);await db.from('schedule_slots').delete().eq('booking_id',b.id);toast('Booking cancelled and hours reopened.');loadAll()}
 async function loadSchedule(){const d=$('#scheduleDate').value||ymd(new Date());const {data,error}=await db.from('schedule_slots').select('*').eq('slot_date',d).order('start_hour');if(error)return $('#scheduleSlots').innerHTML=`<div class="empty">${esc(error.message)}</div>`;const map=new Map((data||[]).map(r=>[Number(r.start_hour),r]));if(d===ymd(new Date()))$('#metricBlocked').textContent=(data||[]).filter(r=>r.status==='unavailable').length;let html='';for(let h=8;h<22;h++){const r=map.get(h),st=r?.status||'available';html+=`<button class="slot ${st}" data-hour="${h}" ${st==='booked'?'disabled':''}><span class="slot-time">${shortHour(h)} to ${shortHour(h+1)}</span>${st==='unavailable'?'<small>Blocked</small>':st==='booked'?'<small>Booked</small>':''}</button>`}$('#scheduleSlots').innerHTML=html;$$('#scheduleSlots .slot:not([disabled])').forEach(btn=>btn.onclick=()=>toggleSlot(d,Number(btn.dataset.hour),map.get(Number(btn.dataset.hour))))}
 async function toggleSlot(date,h,row){if(row?.status==='unavailable'){const {error}=await db.from('schedule_slots').delete().eq('id',row.id);if(error)return toast(error.message);toast(`${hour(h)} reopened.`)}else{const {error}=await db.from('schedule_slots').upsert({slot_date:date,start_hour:h,status:'unavailable',notes:'Blocked by Coach Kyle admin'},{onConflict:'slot_date,start_hour'});if(error)return toast(error.message);toast(`${hour(h)} blocked.`)}loadSchedule()}
