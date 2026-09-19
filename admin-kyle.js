@@ -215,7 +215,61 @@ async function saveManualBooking(e){
 function parseBookingRequestText(text){
   const src=String(text||'').replace(/\r/g,'').trim();
   if(!src)return null;
-  const grab=(label)=>{const m=src.match(new RegExp('^'+label+'\\s*:\\s*(.+)
+  const grab=(label)=>{
+    const m=src.match(new RegExp('^'+label+'\\s*:\\s*(.+)$','mi'));
+    return m?m[1].trim():'';
+  };
+  const code=grab('Request Code');
+  let date='',start=null,end=null,players=null;
+  if(code){
+    const m=code.match(/CKREQ\|([0-9]{4}-[0-9]{2}-[0-9]{2})\|(\d{1,2})\|(\d{1,2})\|(\d{1,2})/i);
+    if(m){date=m[1];start=Number(m[2]);end=Number(m[3]);players=Number(m[4])}
+  }
+  if(!date){
+    const raw=grab('Date'),d=raw?new Date(raw):null;
+    if(d&&!Number.isNaN(d.getTime()))date=ymd(d);
+  }
+  if(start==null||end==null){
+    const tm=grab('Time').match(/(\d{1,2})(?::\d{2})?\s*(AM|PM)\s*-\s*(\d{1,2})(?::\d{2})?\s*(AM|PM)/i);
+    const to24=(h,ampm)=>{h=Number(h)%12;return h+(String(ampm).toUpperCase()==='PM'?12:0)};
+    if(tm){start=to24(tm[1],tm[2]);end=to24(tm[3],tm[4])}
+  }
+  if(players==null){
+    const pm=grab('Pax').match(/\d+/);
+    if(pm)players=Number(pm[0]);
+  }
+  const feeRaw=grab('Estimated Coaching Fee').replace(/[^0-9.]/g,'');
+  const amount=feeRaw?Number(feeRaw):null;
+  return {
+    name:grab('Booking Name'),
+    contact:grab('Contact')==='Not provided'?'':grab('Contact'),
+    date,start,end,players:players||1,
+    goal:grab('Goal')||'General coaching',
+    amount:Number.isFinite(amount)?amount:null,
+    source:'Messenger booking request'
+  };
+}
+function openPasteBooking(){
+  $('#pasteBookingText').value='';
+  $('#pasteBookingStatus').className='manual-availability';
+  $('#pasteBookingStatus').textContent='Waiting for a booking request.';
+  $('#pasteBookingDialog').showModal();
+  setTimeout(()=>$('#pasteBookingText')?.focus(),80);
+}
+function closePasteBooking(){$('#pasteBookingDialog')?.close()}
+async function parseAndFillBooking(){
+  const parsed=parseBookingRequestText($('#pasteBookingText').value);
+  const status=$('#pasteBookingStatus');
+  if(!parsed?.name||!parsed.date||parsed.start==null||parsed.end==null){
+    status.className='manual-availability warn';
+    status.textContent='Could not read the booking details. Paste the complete message copied from the Coach Kyle public site.';
+    return;
+  }
+  closePasteBooking();
+  await openManualBooking(parsed);
+  toast('Booking request parsed. Review the details, then create the confirmed booking.');
+}
+function wireManualBooking(){
   const form=$('#manualBookingForm');if(!form)return;
   $('#openManualBookingBtn')?.addEventListener('click',()=>openManualBooking());
   $('#pasteBookingRequestBtn')?.addEventListener('click',openPasteBooking);
@@ -231,11 +285,20 @@ function parseBookingRequestText(text){
   $('#manualBookingPlayers')?.addEventListener('change',()=>{renderManualParticipantFields();syncManualAutoRate()});
   $('#manualBookingName')?.addEventListener('input',updateManualBookingSummary);
   $('#manualBookingPayment')?.addEventListener('input',updateManualBookingSummary);
-  $('#manualBookingAmount')?.addEventListener('input',()=>{manualBookingState.rateOverridden=Number($('#manualBookingAmount').value||0)!==manualBookingState.autoAmount;updateManualBookingSummary()});
+  $('#manualBookingAmount')?.addEventListener('input',()=>{
+    manualBookingState.rateOverridden=Number($('#manualBookingAmount').value||0)!==manualBookingState.autoAmount;
+    updateManualBookingSummary();
+  });
   $('#resetManualBookingRate')?.addEventListener('click',()=>syncManualAutoRate(true));
   $('#manualBookingClient')?.addEventListener('change',()=>{
     const row=clientCache.find(x=>String(x.id)===String($('#manualBookingClient').value));
-    if(row){$('#manualBookingName').value=row.full_name||'';$('#manualBookingContact').value=row.contact||''}else{$('#manualBookingName').value='';$('#manualBookingContact').value=''}
+    if(row){
+      $('#manualBookingName').value=row.full_name||'';
+      $('#manualBookingContact').value=row.contact||'';
+    }else{
+      $('#manualBookingName').value='';
+      $('#manualBookingContact').value='';
+    }
     updateManualBookingSummary();
   });
   form.addEventListener('submit',saveManualBooking);
@@ -257,10 +320,11 @@ async function loadSchedule(){
   let html='';
   for(let h=8;h<22;h++){
     const r=map.get(h),st=r?.status||'available',reason=publicBlockReason(r?.notes);
-    html+=`<button class="slot ${st}" data-hour="${h}" ${st==='booked'?'disabled':''}><span class="slot-time">${shortHour(h)} to ${shortHour(h+1)}</span>${st==='unavailable'?'<small>'+(reason?esc(reason):'Coach Unavailable')+'</small>':st==='booked'?'<small>Booked</small>':'<small>Available</small>'}</button>`;
+    const detail=st==='unavailable'?(reason||'Coach Unavailable'):st==='booked'?'Booked':'Available';
+    html+=`<button class="slot ${st}" data-hour="${h}" ${st==='booked'?'disabled':''}><span class="slot-time">${shortHour(h)} to ${shortHour(h+1)}</span><small>${esc(detail)}</small></button>`;
   }
   $('#scheduleSlots').innerHTML=html;
-  $('#scheduleSlots .slot:not([disabled])').forEach(btn=>btn.onclick=()=>toggleSlot(d,Number(btn.dataset.hour),map.get(Number(btn.dataset.hour))));
+  $$('#scheduleSlots .slot:not([disabled])').forEach(btn=>btn.onclick=()=>toggleSlot(d,Number(btn.dataset.hour),map.get(Number(btn.dataset.hour))));
 }
 function openBlockReason(date,h){
   pendingBlockSlot={date,h};
@@ -276,11 +340,17 @@ async function saveBlockReason(){
   let reason=$('#blockReason').value;
   if(reason==='Other')reason=$('#blockReasonOther').value.trim()||'Coach Unavailable';
   const note=($('#blockReasonPublic').checked?'PUBLIC:':'PRIVATE:')+reason;
-  const {error}=await db.from('schedule_slots').upsert({slot_date:pendingBlockSlot.date,start_hour:pendingBlockSlot.h,status:'unavailable',notes:note},{onConflict:'slot_date,start_hour'});
+  const {error}=await db.from('schedule_slots').upsert({
+    slot_date:pendingBlockSlot.date,
+    start_hour:pendingBlockSlot.h,
+    status:'unavailable',
+    notes:note
+  },{onConflict:'slot_date,start_hour'});
   if(error)return toast(error.message);
+  const h=pendingBlockSlot.h;
   $('#blockReasonDialog').close();
-  toast(`${hour(pendingBlockSlot.h)} blocked • ${reason}.`);
   pendingBlockSlot=null;
+  toast(`${hour(h)} blocked • ${reason}.`);
   await loadSchedule();
 }
 async function toggleSlot(date,h,row){
@@ -289,12 +359,17 @@ async function toggleSlot(date,h,row){
     if(error)return toast(error.message);
     toast(`${hour(h)} reopened.`);
     await loadSchedule();
-  }else openBlockReason(date,h);
+  }else{
+    openBlockReason(date,h);
+  }
 }
-$('#blockReason')?.addEventListener('change',()=>{$('#blockReasonOtherWrap').style.display=$('#blockReason').value==='Other'?'grid':'none'});
+$('#blockReason')?.addEventListener('change',()=>{
+  $('#blockReasonOtherWrap').style.display=$('#blockReason').value==='Other'?'grid':'none';
+});
 $('#closeBlockReason')?.addEventListener('click',()=>$('#blockReasonDialog').close());
 $('#cancelBlockReason')?.addEventListener('click',()=>$('#blockReasonDialog').close());
 $('#saveBlockReason')?.addEventListener('click',saveBlockReason);
+
 async function loadClients(){const {data,error}=await db.from('clients').select('*').eq('is_active',true).order('full_name').limit(300);if(error){$('#clients').innerHTML=`<div class="empty">${esc(error.message)}</div>`;return}clientCache=data||[];$('#metricClients').textContent=clientCache.length;renderClientList()}
 function openAddClientDialog(){const d=$('#addClientDialog');if(!d)return;$('#manualClientName').value='';$('#manualClientContact').value='';$('#manualClientNote').value='';d.showModal()}
 function closeAddClientDialog(){const d=$('#addClientDialog');if(d?.open)d.close()}
