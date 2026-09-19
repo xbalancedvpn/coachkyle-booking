@@ -6,7 +6,7 @@
   const hourName=h=>`${h%12||12}:00 ${h<12?'AM':'PM'}`;
   const shortHour=h=>`${h%12||12}${h<12?'am':'pm'}`;
 
-  let selectedStart=null,selectedEnd=null,scheduleMap=new Map(),submittedSignature=null;
+  let selectedStart=null,selectedEnd=null,scheduleMap=new Map(),submittedSignature=null,pendingRequestRef=null,requestVersion=0,hasSubmitted=false;
 
   const dateInput=$('#date'),slots=$('#hourSlots'),players=$('#players'),status=$('#availabilityStatus'),summary=$('#requestSummary');
   const db=window.supabase?.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey);
@@ -51,16 +51,36 @@
   function isSlotOpen(h){return h>=CONFIG.startHour&&h<CONFIG.endHour&&slotStatus(h)==='available'}
   function isSelected(h){return selectedStart!==null&&selectedEnd!==null&&h>=selectedStart&&h<selectedEnd}
 
-  function resetSubmittedRequest(){
-    if(!submittedSignature)return;
-    submittedSignature=null;
-    const btn=$('#sendRequest');
-    if(btn){
-      btn.disabled=false;
-      btn.classList.remove('request-sent');
-      btn.textContent='Send Request';
-      btn.onclick=sendRequest;
+  function makeRequestRef(){
+    return 'CKR-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+  }
+  function ensureRequestRef(){
+    if(!pendingRequestRef)pendingRequestRef=makeRequestRef();
+    return pendingRequestRef;
+  }
+  function setRequestButtonState(kind){
+    const btn=$('#sendRequest'),startNew=$('#startNewRequest');
+    if(!btn)return;
+    btn.classList.remove('request-sent');
+    btn.disabled=false;
+    if(kind==='sent'){
+      btn.disabled=true;btn.classList.add('request-sent');btn.textContent='✓ Request Sent';
+      startNew?.classList.remove('hidden-request-action');
+    }else if(kind==='updated'){
+      btn.disabled=true;btn.classList.add('request-sent');btn.textContent='✓ Request Updated';
+      startNew?.classList.remove('hidden-request-action');
+    }else if(kind==='update'){
+      btn.textContent='Update Request';btn.onclick=sendRequest;
+      startNew?.classList.remove('hidden-request-action');
+    }else{
+      btn.textContent='Send Request';btn.onclick=sendRequest;
+      startNew?.classList.add('hidden-request-action');
     }
+  }
+  function resetSubmittedRequest(){
+    if(!hasSubmitted)return;
+    submittedSignature=null;
+    setRequestButtonState('update');
   }
 
   function requestSignature(){
@@ -191,12 +211,29 @@
     };
   }
 
-  function message(){
+  function message(versionOverride=null){
     const f=getForm();
     if(!f.name||!f.date||f.start===null||f.end===null)return '';
     const d=new Date(`${f.date}T00:00:00`);
     const nice=d.toLocaleDateString('en-PH',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-    return `Hi Coach Kyle! I would like to request a pickleball coaching session.\n\nBooking Name: ${f.name}\nContact: ${f.contact||'Not provided'}\nDate: ${nice}\nTime: ${hourName(f.start)} - ${hourName(f.end)}\nDuration: ${f.duration} hour${f.duration>1?'s':''}\nPax: ${f.players}\nHourly Coaching Rate: ₱${hourlyRate().toLocaleString('en-PH')}\nEstimated Coaching Fee: ₱${totalFee().toLocaleString('en-PH')}\nGoal: ${f.goal||'General coaching'}\nCourt Fee: Not included\nRequest Code: CKREQ|${f.date}|${f.start}|${f.end}|${f.players}\n\nPlease confirm if this schedule is available. Thank you!`;
+    const ref=ensureRequestRef(),version=versionOverride??Math.max(1,requestVersion||1);
+    return `Hi Coach Kyle! I would like to request a pickleball coaching session.
+
+Booking Name: ${f.name}
+Contact: ${f.contact||'Not provided'}
+Date: ${nice}
+Time: ${hourName(f.start)} - ${hourName(f.end)}
+Duration: ${f.duration} hour${f.duration>1?'s':''}
+Pax: ${f.players}
+Hourly Coaching Rate: ₱${hourlyRate().toLocaleString('en-PH')}
+Estimated Coaching Fee: ₱${totalFee().toLocaleString('en-PH')}
+Goal: ${f.goal||'General coaching'}
+Court Fee: Not included
+Request Ref: ${ref}
+Request Version: ${version}
+Request Code: CKREQ|${f.date}|${f.start}|${f.end}|${f.players}
+
+Please confirm if this schedule is available. Thank you!`;
   }
 
   function updateSummary(){
@@ -242,7 +279,8 @@
 
   async function copyAndOpen(){
     if(!validate())return;
-    const text=message();
+    ensureRequestRef();
+    const text=message(Math.max(1,requestVersion||1));
     await copyText(text);
     status.className='status ok';
     status.textContent='Booking details copied. Paste them in Messenger to Coach Kyle.';
@@ -251,8 +289,11 @@
 
   async function sendRequest(){
     if(!validate())return;
-    const f=getForm(),text=message(),btn=$('#sendRequest'),old=btn.textContent;
-    btn.disabled=true;btn.textContent='Sending…';
+    const updating=hasSubmitted;
+    ensureRequestRef();
+    const nextVersion=updating?requestVersion+1:1;
+    const f=getForm(),text=message(nextVersion),btn=$('#sendRequest');
+    btn.disabled=true;btn.textContent=updating?'Updating…':'Sending…';
     let sent=false;
 
     if(db){
@@ -271,26 +312,34 @@
           p_participants:participantList()
         };
         const {error}=await db.rpc('submit_public_inquiry_v17d',payload);
-        if(!error)sent=true; else console.warn(error);
+        if(!error)sent=true;else console.warn(error);
       }catch(e){console.warn(e)}
     }
 
     if(sent){
-      status.className='status ok';
-      status.textContent='Request sent to Coach Kyle Admin. Your schedule is subject to confirmation.';
+      requestVersion=nextVersion;
+      hasSubmitted=true;
       submittedSignature=requestSignature();
-      btn.disabled=true;
-      btn.classList.add('request-sent');
-      btn.textContent='✓ Request Sent';
+      status.className='status ok';
+      status.textContent=updating
+        ? 'Request updated and sent to Coach Kyle Admin. The latest version will be used for review.'
+        : 'Request sent to Coach Kyle Admin. Your schedule is subject to confirmation.';
+      setRequestButtonState(updating?'updated':'sent');
     }else{
       status.className='status warn';
-      status.textContent='Could not send this request to Coach Kyle Admin. Please try Send Request again, or use Copy & Open Messenger if you prefer.';
-      submittedSignature=null;
-      btn.disabled=false;
-      btn.classList.remove('request-sent');
-      btn.textContent='Send Request';
-      btn.onclick=sendRequest;
+      status.textContent=`Could not ${updating?'update':'send'} this request. Please try again, or use Copy & Open Messenger.`;
+      setRequestButtonState(updating?'update':'new');
     }
+  }
+
+  function startNewRequest(){
+    pendingRequestRef=null;requestVersion=0;hasSubmitted=false;submittedSignature=null;
+    selectedStart=null;selectedEnd=null;
+    $('#name').value='';$('#contact').value='';$('#players').value='1';$('#goal').selectedIndex=0;
+    renderSlots();updateSummary();
+    status.className='status ok';
+    status.textContent='New request started. Choose your preferred date and available hours.';
+    setRequestButtonState('new');
   }
 
   function wire(){
@@ -300,6 +349,7 @@
     ['name','contact','goal'].forEach(id=>$('#'+id).addEventListener('input',()=>{resetSubmittedRequest();updateSummary()}));
     $('#copyMessenger').onclick=copyAndOpen;
     $('#sendRequest').onclick=sendRequest;
+    $('#startNewRequest')?.addEventListener('click',startNewRequest);
     $('#scrollBooking').onclick=()=>$('#booking').scrollIntoView({behavior:'smooth'});
     $('#scrollRates').onclick=()=>$('#rates').scrollIntoView({behavior:'smooth'});
     loadAvailability();updateSummary();
