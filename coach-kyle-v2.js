@@ -45,7 +45,9 @@
     players.value=String(current);
   }
 
-  function slotStatus(h){return scheduleMap.get(`${dateInput.value}|${h}`)||'available'}
+  function slotInfo(h){return scheduleMap.get(`${dateInput.value}|${h}`)||{status:'available',notes:''}}
+  function slotStatus(h){return slotInfo(h).status||'available'}
+  function slotPublicReason(h){const note=String(slotInfo(h).notes||'');return note.startsWith('PUBLIC:')?note.slice(7).trim():''}
   function isSlotOpen(h){return h>=CONFIG.startHour&&h<CONFIG.endHour&&slotStatus(h)==='available'}
   function isSelected(h){return selectedStart!==null&&selectedEnd!==null&&h>=selectedStart&&h<selectedEnd}
 
@@ -112,10 +114,10 @@
   function renderSlots(){
     slots.innerHTML='';
     for(let h=CONFIG.startHour;h<CONFIG.endHour;h++){
-      const st=slotStatus(h),b=document.createElement('button');
+      const st=slotStatus(h),reason=slotPublicReason(h),b=document.createElement('button');
       b.type='button';
       b.className='slot hour-select-slot';
-      b.innerHTML=`<span class="slot-time">${shortHour(h)} to ${shortHour(h+1)}</span>${st==='booked'?'<small>Booked</small>':st==='unavailable'?'<small>Coach Unavailable</small>':'<small>Available</small>'}`;
+      b.innerHTML=`<span class="slot-time">${shortHour(h)} to ${shortHour(h+1)}</span>${st==='booked'?'<small>Booked</small>':st==='unavailable'?`<small>${reason||'Coach Unavailable'}</small>`:'<small>Available</small>'}`;
 
       if(st==='booked'||st==='unavailable'){
         b.disabled=true;
@@ -143,9 +145,9 @@
     }
 
     try{
-      const {data,error}=await db.from('public_schedule').select('slot_date,start_hour,status').eq('slot_date',dateInput.value);
+      const {data,error}=await db.from('public_schedule').select('*').eq('slot_date',dateInput.value);
       if(error)throw error;
-      (data||[]).forEach(r=>scheduleMap.set(`${r.slot_date}|${Number(r.start_hour)}`,r.status));
+      (data||[]).forEach(r=>scheduleMap.set(`${r.slot_date}|${Number(r.start_hour)}`,{status:r.status,notes:r.notes||r.public_reason||''}));
       renderSlots();
       const open=[...Array(CONFIG.endHour-CONFIG.startHour)].filter((_,i)=>isSlotOpen(CONFIG.startHour+i)).length;
       status.className=open?'status ok':'status warn';
