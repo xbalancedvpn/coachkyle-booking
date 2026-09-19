@@ -214,6 +214,11 @@ function wireReport(){
 function init(){
   wireAdminMenu();wireNotifications();wireConfirmation();wireReport();
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadNotifications()});
+  document.addEventListener('click',e=>{
+    if(e.target.closest('[data-confirm],[data-wait],[data-cancel],[data-payment],[data-complete],#savePaymentBtn,#confirmBookingBtn,#completeSessionBtn')){
+      setTimeout(()=>{loadNotifications();if(reportRows.length)loadReport()},1400);
+    }
+  });
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
