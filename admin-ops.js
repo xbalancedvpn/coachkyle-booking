@@ -201,10 +201,17 @@ function barChart(canvas,labels,values,formatter=v=>String(v)){
   ctx.textAlign='left';
 }
 function drawIncomeChart(rows,from,to){
-  const map=new Map();
+  const canvas=$('#incomeChart'),map=new Map();
   rows.forEach(r=>{if(r.session_status!=='completed')return;map.set(r.session_date,(map.get(r.session_date)||0)+r.total)});
-  const dates=[...map.keys()].sort(),labels=dates.length?dates:['No earned sessions'],vals=dates.length?dates.map(d=>map.get(d)):[0];
-  barChart($('#incomeChart'),labels,vals,v=>money(v));
+  const dates=[...map.keys()].sort();
+  if(!dates.length){
+    const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;
+    ctx.clearRect(0,0,w,h);ctx.fillStyle='#0b0b0b';ctx.fillRect(0,0,w,h);
+    ctx.fillStyle='#FFD600';ctx.font='900 54px Arial';ctx.textAlign='center';ctx.fillText('₱0',w/2,h/2-18);
+    ctx.fillStyle='#999';ctx.font='700 19px Arial';ctx.fillText('No completed sessions in the selected date range.',w/2,h/2+32);
+    ctx.textAlign='left';return;
+  }
+  barChart(canvas,dates,dates.map(d=>map.get(d)),v=>money(v));
 }
 function drawSizeChart(rows){
   const map=new Map();rows.forEach(r=>{const k=sessionSizeLabel(r.participant_count);map.set(k,(map.get(k)||0)+1)});
