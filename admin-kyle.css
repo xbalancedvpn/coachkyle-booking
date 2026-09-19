@@ -195,3 +195,10 @@
 .manual-rate-box span{color:#aaa;font-size:12px;line-height:1.45}
 .manual-booking-summary{margin-top:14px;padding:13px;border-radius:12px;background:#15120a;border:1px solid #514713;color:#ffe98d;font-size:12px;line-height:1.55}
 @media(max-width:620px){.manual-booking-grid{grid-template-columns:1fr}.manual-span-2{grid-column:auto}.manual-rate-box{align-items:stretch;flex-direction:column}.manual-participant-row{grid-template-columns:36px 1fr}}
+
+.booking-head-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.paste-booking-dialog{max-width:620px}
+.paste-booking-dialog textarea{min-height:220px;resize:vertical}
+.block-public-toggle{display:flex!important;grid-template-columns:auto 1fr!important;align-items:center;gap:9px;margin-top:14px!important;text-transform:none!important;letter-spacing:0!important;font-size:12px!important;color:#bbb!important}
+.block-public-toggle input{width:auto!important}
+@media(max-width:620px){.booking-head-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.booking-head-actions button{width:100%}}
