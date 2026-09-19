@@ -8,6 +8,37 @@ function toast(t){const x=$('#toast');x.textContent=t;x.classList.add('show');se
 function esc(s){return String(s??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]))}
 function money(n){return `₱${Number(n||0).toLocaleString('en-PH')}`}
 function splitFullName(name){const p=String(name||'').trim().replace(/\s+/g,' ').split(' ').filter(Boolean);return {first:p.shift()||'',last:p.join(' '),full:String(name||'').trim().replace(/\s+/g,' ')}}
+function inquiryRequestMeta(i){
+  const src=String(i?.source_text||'');
+  const ref=(src.match(/^Request Ref:\s*(.+)$/mi)||[])[1]?.trim()||null;
+  const version=Number((src.match(/^Request Version:\s*(\d+)$/mi)||[])[1]||0);
+  return {ref,version};
+}
+function latestInquiryVersions(rows){
+  const keep=new Map(),plain=[];
+  for(const row of (rows||[])){
+    const meta=inquiryRequestMeta(row);
+    if(!meta.ref){plain.push(row);continue}
+    const prev=keep.get(meta.ref);
+    if(!prev||meta.version>inquiryRequestMeta(prev).version||(meta.version===inquiryRequestMeta(prev).version&&String(row.created_at||'')>String(prev.created_at||'')))keep.set(meta.ref,row);
+  }
+  return [...plain,...keep.values()].sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+}
+function completionDateKey(b){
+  const raw=b?.session_closed_at;
+  if(raw){const d=new Date(raw);if(!Number.isNaN(d.getTime()))return ymd(d)}
+  return String(b?.session_date||'');
+}
+function wasCompletedEarly(b){
+  if(b?.session_status!=='completed'||!b?.session_closed_at)return false;
+  const closed=new Date(b.session_closed_at);
+  if(Number.isNaN(closed.getTime()))return false;
+  const closedDay=ymd(closed),sessionDay=String(b.session_date||'');
+  if(closedDay<sessionDay)return true;
+  if(closedDay>sessionDay)return false;
+  const closedHour=closed.getHours()+(closed.getMinutes()/60);
+  return closedHour<Number(b.end_hour||0);
+}
 function showAdmin(session){$('#loginView').classList.add('hidden');$('#adminView').classList.remove('hidden');$('#adminEmail').textContent=session.user.email||'';$('#scheduleDate').value=ymd(new Date());buildSkillFields();loadAll()}
 function showLogin(){$('#adminView').classList.add('hidden');$('#loginView').classList.remove('hidden')}
 async function init(){const {data:{session}}=await db.auth.getSession();session?showAdmin(session):showLogin()}
@@ -15,15 +46,36 @@ $('#loginForm').addEventListener('submit',async e=>{e.preventDefault();$('#login
 $('#logoutBtn').onclick=async()=>{await db.auth.signOut();showLogin()};
 $('#refreshBtn').onclick=loadAll;$('#scheduleDate').addEventListener('change',loadSchedule);$('#clientSearch').addEventListener('input',renderClientList);
 async function loadAll(){await Promise.all([loadInquiries(),loadBookings(),loadPaymentFollowups(),loadCompletedSessions(),loadSchedule(),loadClients()])}
-async function loadInquiries(){const {data,error}=await db.from('inquiries').select('*').in('status',['new','waiting','tentative']).order('created_at',{ascending:false}).limit(50);if(error)return $('#inquiries').innerHTML=`<div class="empty">${esc(error.message)}</div>`;$('#metricInquiries').textContent=data.length;$('#inquiries').innerHTML=data.length?data.map(i=>`<article class="card"><div class="card-top"><div><h3>${esc(i.client_name)}</h3><div class="meta">${esc(i.preferred_date||'No date')} • ${i.start_hour==null?'No time':`${hour(i.start_hour)}–${hour(i.end_hour)}`}<br>${i.participant_count||1} player${Number(i.participant_count||1)>1?'s':''} • ${money(i.quoted_rate)} • ${esc(i.goal_focus||'General coaching')}<br>${esc(i.contact||'No contact')}</div></div><span class="tag ${i.status==='new'?'new':''}">${esc(i.status)}</span></div><div class="card-actions"><button class="mini confirm" data-confirm="${i.id}">Confirm</button><button class="mini" data-wait="${i.id}">Mark Waiting</button><button class="mini" data-cancel="${i.id}">Cancel</button></div></article>`).join(''):'<div class="empty">No pending inquiries.</div>';data.forEach(i=>{document.querySelector(`[data-confirm="${i.id}"]`)?.addEventListener('click',()=>openConfirm(i));document.querySelector(`[data-wait="${i.id}"]`)?.addEventListener('click',()=>setInquiry(i.id,'waiting'));document.querySelector(`[data-cancel="${i.id}"]`)?.addEventListener('click',()=>setInquiry(i.id,'cancelled'))})}
-async function setInquiry(id,status){const {error}=await db.from('inquiries').update({status}).eq('id',id);if(error)return toast(error.message);toast(`Inquiry marked ${status}.`);loadInquiries()}
+async function loadInquiries(){
+  const {data,error}=await db.from('inquiries').select('*').in('status',['new','waiting','tentative']).order('created_at',{ascending:false}).limit(100);
+  if(error)return $('#inquiries').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+  const rows=latestInquiryVersions(data||[]);
+  $('#metricInquiries').textContent=rows.length;
+  $('#inquiries').innerHTML=rows.length?rows.map(i=>{
+    const meta=inquiryRequestMeta(i);
+    return `<article class="card"><div class="card-top"><div><h3>${esc(i.client_name)}</h3><div class="meta">${esc(i.preferred_date||'No date')} • ${i.start_hour==null?'No time':`${hour(i.start_hour)}–${hour(i.end_hour)}`}<br>${i.participant_count||1} player${Number(i.participant_count||1)>1?'s':''} • ${money(i.quoted_rate)} • ${esc(i.goal_focus||'General coaching')}<br>${esc(i.contact||'No contact')}${meta.ref?`<br><span class="request-ref">Request ${esc(meta.ref)} • v${meta.version||1}</span>`:''}</div></div><span class="tag ${i.status==='new'?'new':''}">${esc(i.status)}</span></div><div class="card-actions"><button class="mini confirm" data-confirm="${i.id}">Confirm</button><button class="mini" data-wait="${i.id}">Mark Waiting</button><button class="mini" data-cancel="${i.id}">Cancel</button></div></article>`;
+  }).join(''):'<div class="empty">No pending inquiries.</div>';
+  rows.forEach(i=>{
+    document.querySelector(`[data-confirm="${i.id}"]`)?.addEventListener('click',()=>openConfirm(i));
+    document.querySelector(`[data-wait="${i.id}"]`)?.addEventListener('click',()=>setInquiry(i.id,'waiting'));
+    document.querySelector(`[data-cancel="${i.id}"]`)?.addEventListener('click',()=>setInquiry(i.id,'cancelled'));
+  });
+}
+async function setInquiry(id,status){const {error}=await db.from('inquiries').update({status}).eq('id',id);if(error)return toast(error.message);toast(`Inquiry marked ${status}.`);await loadInquiries();window.dispatchEvent(new CustomEvent('coach:data-changed',{detail:{type:'inquiry-status',inquiryId:id,status}}))}
 function openConfirm(i){activeInquiry=i;$('#confirmTitle').textContent=i.client_name;$('#confirmMeta').innerHTML=`${esc(i.preferred_date)} • ${hour(i.start_hour)}–${hour(i.end_hour)}<br>${i.participant_count||1} player${Number(i.participant_count||1)>1?'s':''} • ${esc(i.coaching_type||'Coaching session')}<br>${esc(i.contact||'No contact')}`;$('#confirmAmount').value=Number(i.quoted_rate||0);$('#confirmNote').value='';$('#confirmDialog').showModal()}
 $('#confirmBookingBtn').onclick=confirmBooking;
 async function findOrCreateClient(p){const full=String(p.full_name||`${p.first_name||''} ${p.last_name||''}`).trim().replace(/\s+/g,' '),contact=p.contact||null;let q=db.from('clients').select('*').ilike('full_name',full).eq('is_active',true);if(contact)q=q.eq('contact',contact);const {data:found}=await q.limit(1);if(found?.length)return found[0];const n=splitFullName(full),payload={first_name:p.first_name||n.first,last_name:p.last_name||n.last,full_name:full,name_key:full.toLowerCase(),contact,contact_key:contact?String(contact).trim().toLowerCase():null,is_active:true};const {data,error}=await db.from('clients').insert(payload).select('*').single();if(error)throw error;return data}
-async function confirmBooking(){const i=activeInquiry;if(!i)return;const amount=Number($('#confirmAmount').value||0);if(i.start_hour==null||i.end_hour==null||!i.preferred_date)return toast('Inquiry has incomplete schedule details.');const {data:conflicts,error:ce}=await db.from('schedule_slots').select('start_hour,status').eq('slot_date',i.preferred_date).gte('start_hour',i.start_hour).lt('start_hour',i.end_hour).in('status',['booked','unavailable']);if(ce)return toast(ce.message);if(conflicts?.length)return toast('That time is no longer available.');const {data:participants,error:pe}=await db.from('inquiry_participants').select('*').eq('inquiry_id',i.id).order('participant_order');if(pe)return toast(pe.message);const pc=Number(i.participant_count||participants?.length||1);const {data:b,error}=await db.from('bookings').insert({session_date:i.preferred_date,start_hour:i.start_hour,end_hour:i.end_hour,client_name:i.client_name,contact:i.contact,participant_count:pc,coaching_type:i.coaching_type||`${pc} Player${pc>1?'s':''}`,rate_mode:'standard',rate_per_person:pc?amount/pc:amount,total_amount:amount,notes:$('#confirmNote').value.trim()||i.notes||null,status:'confirmed',session_status:'scheduled'}).select('id').single();if(error)return toast(error.message);try{const bp=[];let primaryClientId=null;for(const p of (participants||[])){const c=await findOrCreateClient(p);if(p.is_primary||Number(p.participant_order)===1)primaryClientId=c.id;bp.push({booking_id:b.id,client_id:c.id,participant_order:p.participant_order,first_name:p.first_name,last_name:p.last_name,full_name:p.full_name,contact:p.contact||null,contact_key:p.contact_key||null,is_primary:!!p.is_primary})}if(bp.length){const {error:e}=await db.from('booking_participants').insert(bp);if(e)throw e}if(primaryClientId)await db.from('bookings').update({client_id:primaryClientId}).eq('id',b.id);const rows=[];for(let h=i.start_hour;h<i.end_hour;h++)rows.push({slot_date:i.preferred_date,start_hour:h,status:'booked',client_name:i.client_name,contact:i.contact,coaching_type:i.coaching_type,rate:amount,booking_id:b.id});const {error:se}=await db.from('schedule_slots').upsert(rows,{onConflict:'slot_date,start_hour'});if(se)throw se;await db.from('inquiries').update({status:'confirmed'}).eq('id',i.id);$('#confirmDialog').close();toast('Booking confirmed. Client profiles updated.');await loadAll();window.dispatchEvent(new CustomEvent('coach:data-changed',{detail:{type:'booking-confirmed',bookingId:b.id,inquiryId:i.id}}))}catch(e){await db.from('booking_participants').delete().eq('booking_id',b.id);await db.from('bookings').delete().eq('id',b.id);toast(e.message||'Could not finish booking confirmation.') }}
+async function confirmBooking(){const i=activeInquiry;if(!i)return;const amount=Number($('#confirmAmount').value||0);if(i.start_hour==null||i.end_hour==null||!i.preferred_date)return toast('Inquiry has incomplete schedule details.');const {data:conflicts,error:ce}=await db.from('schedule_slots').select('start_hour,status').eq('slot_date',i.preferred_date).gte('start_hour',i.start_hour).lt('start_hour',i.end_hour).in('status',['booked','unavailable']);if(ce)return toast(ce.message);if(conflicts?.length)return toast('That time is no longer available.');const {data:participants,error:pe}=await db.from('inquiry_participants').select('*').eq('inquiry_id',i.id).order('participant_order');if(pe)return toast(pe.message);const pc=Number(i.participant_count||participants?.length||1);const {data:b,error}=await db.from('bookings').insert({session_date:i.preferred_date,start_hour:i.start_hour,end_hour:i.end_hour,client_name:i.client_name,contact:i.contact,participant_count:pc,coaching_type:i.coaching_type||`${pc} Player${pc>1?'s':''}`,rate_mode:'standard',rate_per_person:pc?amount/pc:amount,total_amount:amount,notes:$('#confirmNote').value.trim()||i.notes||null,status:'confirmed',session_status:'scheduled'}).select('id').single();if(error)return toast(error.message);try{const bp=[];let primaryClientId=null;for(const p of (participants||[])){const c=await findOrCreateClient(p);if(p.is_primary||Number(p.participant_order)===1)primaryClientId=c.id;bp.push({booking_id:b.id,client_id:c.id,participant_order:p.participant_order,first_name:p.first_name,last_name:p.last_name,full_name:p.full_name,contact:p.contact||null,contact_key:p.contact_key||null,is_primary:!!p.is_primary})}if(bp.length){const {error:e}=await db.from('booking_participants').insert(bp);if(e)throw e}if(primaryClientId)await db.from('bookings').update({client_id:primaryClientId}).eq('id',b.id);const rows=[];for(let h=i.start_hour;h<i.end_hour;h++)rows.push({slot_date:i.preferred_date,start_hour:h,status:'booked',client_name:i.client_name,contact:i.contact,coaching_type:i.coaching_type,rate:amount,booking_id:b.id});const {error:se}=await db.from('schedule_slots').upsert(rows,{onConflict:'slot_date,start_hour'});if(se)throw se;await db.from('inquiries').update({status:'confirmed'}).eq('id',i.id);
+const reqMeta=inquiryRequestMeta(i);
+if(reqMeta.ref){
+  const {data:siblings}=await db.from('inquiries').select('id,source_text,status').neq('id',i.id).in('status',['new','waiting','tentative']);
+  const stale=(siblings||[]).filter(x=>inquiryRequestMeta(x).ref===reqMeta.ref).map(x=>x.id);
+  if(stale.length)await db.from('inquiries').update({status:'cancelled'}).in('id',stale);
+}
+$('#confirmDialog').close();toast('Booking confirmed. Client profiles updated.');await loadAll();window.dispatchEvent(new CustomEvent('coach:data-changed',{detail:{type:'booking-confirmed',bookingId:b.id,inquiryId:i.id}}))}catch(e){await db.from('booking_participants').delete().eq('booking_id',b.id);await db.from('bookings').delete().eq('id',b.id);toast(e.message||'Could not finish booking confirmation.') }}
 async function loadBookings(){
   const today=ymd(new Date());
-  const {data,error}=await db.from('bookings').select('*').eq('status','confirmed').gte('session_date',today).order('session_date').order('start_hour').limit(120);
+  const {data,error}=await db.from('bookings').select('*').eq('status','confirmed').order('session_date').order('start_hour').limit(400);
   if(error){
     $('#bookings').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
     $('#todayBookings').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
@@ -36,26 +88,24 @@ async function loadBookings(){
     if(pe)return toast(pe.message);
     (p||[]).forEach(x=>paymentTotals.set(x.booking_id,(paymentTotals.get(x.booking_id)||0)+Number(x.amount||0)));
   }
-
-  const withBalance=(data||[]).map(b=>{
+  const rows=(data||[]).map(b=>{
     const paid=paymentTotals.get(b.id)||0,total=Number(b.total_amount||0);
     return {...b,paid,balance:Math.max(0,total-paid)};
   });
-
-  const todays=withBalance.filter(b=>b.session_date===today && (b.session_status!=='completed'||b.balance>0.001));
-  const upcoming=withBalance.filter(b=>b.session_date>today && b.session_status!=='completed');
-
+  const todays=rows.filter(b=>b.session_date===today&&(b.session_status!=='completed'||b.balance>0.001));
+  const upcoming=rows.filter(b=>b.session_date>today&&b.session_status!=='completed');
   $('#metricToday').textContent=String(todays.length);
   $('#metricBookings').textContent=String(upcoming.length);
-  $('#metricBalance').textContent=money(withBalance.reduce((s,b)=>s+b.balance,0));
+  $('#metricBalance').textContent=money(rows.reduce((s,b)=>s+b.balance,0));
   renderBookings(upcoming,todays);
 }
 function isSessionEarly(b){const now=new Date(),d=ymd(now);if(String(b.session_date)>d)return true;if(String(b.session_date)<d)return false;const end=Number(b.end_hour||0),nowHour=now.getHours()+(now.getMinutes()/60);return end>nowHour}
 function bookingCard(b,todayMode=false){
-  const paid=Number(b.paid??paymentTotals.get(b.id)??0),total=Number(b.total_amount||0),bal=Math.max(0,total-paid),payState=bal<=0?'Paid':paid>0?'Partial':'Unpaid',done=b.session_status==='completed',early=!done&&isSessionEarly(b),completeLabel=early?'Complete Early':'Mark Completed';
+  const paid=Number(b.paid??paymentTotals.get(b.id)??0),total=Number(b.total_amount||0),bal=Math.max(0,total-paid),payState=bal<=0?'Paid':paid>0?'Partial':'Unpaid',done=b.session_status==='completed',early=!done&&isSessionEarly(b),completedEarly=wasCompletedEarly(b),completeLabel=early?'Complete Early':'Mark Completed';
   const completionBtn=!done?`<button class="mini confirm" data-complete="${b.id}">${completeLabel}</button>`:'';
   const paymentBtn=bal>0?`<button class="mini" data-payment="${b.id}">Record Payment</button>`:'';
-  return `<article class="card"><div class="card-top"><div><h3>${esc(b.client_name)}</h3><div class="meta">${esc(b.session_date)} • ${hour(b.start_hour)}–${hour(b.end_hour)}<br>${b.participant_count} player${b.participant_count>1?'s':''} • ${money(total)}<br>${esc(b.contact||'No contact')}</div></div><div class="tag-stack"><span class="tag">${esc(b.session_status||'scheduled')}</span><span class="tag payment ${payState.toLowerCase()}">${payState}${bal?` • ${money(bal)} due`:''}</span></div></div><div class="card-actions">${completionBtn}${paymentBtn}<button class="mini confirm-card" data-confirmation="${b.id}">Confirmation PNG</button><button class="mini danger" data-cancel-booking="${b.id}">Cancel Booking</button></div></article>`;
+  const stateLabel=completedEarly?'Completed Early':(b.session_status||'scheduled');
+  return `<article class="card booking-card" id="booking-card-${b.id}"><div class="card-top"><div><h3>${esc(b.client_name)}</h3><div class="meta">${esc(b.session_date)} • ${hour(b.start_hour)}–${hour(b.end_hour)}<br>${b.participant_count} player${b.participant_count>1?'s':''} • ${money(total)}<br>${esc(b.contact||'No contact')}</div></div><div class="tag-stack"><span class="tag ${completedEarly?'completed-early':''}">${esc(stateLabel)}</span><span class="tag payment ${payState.toLowerCase()}">${payState}${bal?` • ${money(bal)} due`:''}</span></div></div><div class="card-actions">${completionBtn}${paymentBtn}<button class="mini confirm-card" data-confirmation="${b.id}">Confirmation PNG</button><button class="mini danger" data-cancel-booking="${b.id}">Cancel Booking</button></div></article>`;
 }
 function renderBookings(upcoming,todays){
   $('#todayBookings').innerHTML=todays.length?todays.map(b=>bookingCard(b,true)).join(''):'<div class="empty">No coaching sessions need attention today.</div>';
@@ -87,7 +137,8 @@ function openPayment(b){activePaymentBooking=b;const paid=paymentTotals.get(b.id
 async function loadPaymentFollowups(){
   const list=$('#paymentFollowupList'),count=$('#paymentFollowupCount');
   if(!list)return;
-  const today=ymd(new Date());const {data:bookings,error}=await db.from('bookings').select('*').eq('status','confirmed').eq('session_status','completed').lt('session_date',today).order('session_date',{ascending:false}).order('start_hour',{ascending:false}).limit(120);
+  const today=ymd(new Date());
+  const {data:bookings,error}=await db.from('bookings').select('*').eq('status','confirmed').eq('session_status','completed').order('session_closed_at',{ascending:false}).order('session_date',{ascending:false}).limit(300);
   if(error){list.innerHTML=`<div class="empty">${esc(error.message)}</div>`;if(count)count.textContent='0';return}
   const ids=(bookings||[]).map(b=>b.id),paidMap=new Map();
   if(ids.length){
@@ -95,11 +146,13 @@ async function loadPaymentFollowups(){
     if(pe){list.innerHTML=`<div class="empty">${esc(pe.message)}</div>`;if(count)count.textContent='0';return}
     (p||[]).forEach(x=>paidMap.set(x.booking_id,(paidMap.get(x.booking_id)||0)+Number(x.amount||0)));
   }
-  const rows=(bookings||[]).map(b=>({...b,paid:paidMap.get(b.id)||0})).filter(b=>Number(b.total_amount||0)-b.paid>0.001);
+  const rows=(bookings||[]).map(b=>({...b,paid:paidMap.get(b.id)||0}))
+    .filter(b=>Number(b.total_amount||0)-b.paid>0.001)
+    .filter(b=>String(b.session_date)!==today);
   if(count)count.textContent=String(rows.length);
   list.innerHTML=rows.length?rows.map(b=>{
-    const total=Number(b.total_amount||0),bal=Math.max(0,total-b.paid),state=b.paid>0?'Partial':'Unpaid';
-    return `<article class="card payment-followup-card" id="payment-followup-${b.id}"><div class="card-top"><div><h3>${esc(b.client_name)}</h3><div class="meta">${esc(b.session_date)} • ${hour(b.start_hour)}–${hour(b.end_hour)}<br>${b.participant_count||1} player${Number(b.participant_count||1)>1?'s':''} • ${money(total)} total<br>${money(b.paid)} paid • <strong>${money(bal)} due</strong></div></div><div class="tag-stack"><span class="tag">completed</span><span class="tag payment ${state.toLowerCase()}">${state}</span></div></div><div class="card-actions"><button class="mini confirm" data-followup-payment="${b.id}">Record Remaining Payment</button><button class="mini confirm-card" data-confirmation="${b.id}">Confirmation PNG</button></div></article>`;
+    const total=Number(b.total_amount||0),bal=Math.max(0,total-b.paid),state=b.paid>0?'Partial':'Unpaid',early=wasCompletedEarly(b);
+    return `<article class="card payment-followup-card" id="payment-followup-${b.id}"><div class="card-top"><div><h3>${esc(b.client_name)}</h3><div class="meta">${esc(b.session_date)} • ${hour(b.start_hour)}–${hour(b.end_hour)}<br>${b.participant_count||1} player${Number(b.participant_count||1)>1?'s':''} • ${money(total)} total<br>${money(b.paid)} paid • <strong>${money(bal)} due</strong></div></div><div class="tag-stack"><span class="tag ${early?'completed-early':''}">${early?'Completed Early':'Completed'}</span><span class="tag payment ${state.toLowerCase()}">${state}</span></div></div><div class="card-actions"><button class="mini confirm" data-followup-payment="${b.id}">Record Remaining Payment</button><button class="mini confirm-card" data-confirmation="${b.id}">Confirmation PNG</button></div></article>`;
   }).join(''):'<div class="empty">No completed sessions need payment follow-up.</div>';
   rows.forEach(b=>document.querySelector(`[data-followup-payment="${b.id}"]`)?.addEventListener('click',()=>{paymentTotals.set(b.id,b.paid);openPayment(b)}));
 }
@@ -108,9 +161,7 @@ async function loadCompletedSessions(){
   const list=$('#completedSessionsList'),count=$('#completedSessionsCount'),toggle=$('#toggleCompletedSessions');
   if(!list)return;
   const today=ymd(new Date());
-  let q=db.from('bookings').select('*').eq('status','confirmed').eq('session_status','completed').order('session_date',{ascending:false}).order('start_hour',{ascending:false}).limit(300);
-  if(!showAllCompleted)q=q.eq('session_date',today);
-  const {data:bookings,error}=await q;
+  const {data:bookings,error}=await db.from('bookings').select('*').eq('status','confirmed').eq('session_status','completed').order('session_closed_at',{ascending:false}).order('session_date',{ascending:false}).limit(400);
   if(error){list.innerHTML=`<div class="empty">${esc(error.message)}</div>`;if(count)count.textContent='0';return}
   const ids=(bookings||[]).map(b=>b.id),paidMap=new Map();
   if(ids.length){
@@ -118,13 +169,17 @@ async function loadCompletedSessions(){
     if(pe){list.innerHTML=`<div class="empty">${esc(pe.message)}</div>`;if(count)count.textContent='0';return}
     (p||[]).forEach(x=>paidMap.set(x.booking_id,(paidMap.get(x.booking_id)||0)+Number(x.amount||0)));
   }
-  const rows=(bookings||[]).map(b=>{
+  let rows=(bookings||[]).map(b=>{
     const paid=paidMap.get(b.id)||0,total=Number(b.total_amount||0);
     return {...b,paid,balance:Math.max(0,total-paid)};
   }).filter(b=>b.balance<=0.001);
+  if(!showAllCompleted)rows=rows.filter(b=>completionDateKey(b)===today);
   if(count)count.textContent=String(rows.length);
   if(toggle)toggle.textContent=showAllCompleted?'Show Today Only':'Show All Completed';
-  list.innerHTML=rows.length?rows.map(b=>`<article class="card completed-session-card"><div class="card-top"><div><h3>${esc(b.client_name)}</h3><div class="meta">${esc(b.session_date)} • ${hour(b.start_hour)}–${hour(b.end_hour)}<br>${b.participant_count||1} player${Number(b.participant_count||1)>1?'s':''} • ${money(b.total_amount)} collected</div></div><div class="tag-stack"><span class="tag">completed</span><span class="tag payment paid">Paid</span></div></div><div class="card-actions"><button class="mini confirm-card" data-confirmation="${b.id}">Confirmation PNG</button></div></article>`).join(''):`<div class="empty">${showAllCompleted?'No fully settled completed sessions yet.':'No fully settled completed sessions today.'}</div>`;
+  list.innerHTML=rows.length?rows.map(b=>{
+    const early=wasCompletedEarly(b);
+    return `<article class="card completed-session-card"><div class="card-top"><div><h3>${esc(b.client_name)}</h3><div class="meta">${esc(b.session_date)} • ${hour(b.start_hour)}–${hour(b.end_hour)}<br>${b.participant_count||1} player${Number(b.participant_count||1)>1?'s':''} • ${money(b.total_amount)} collected</div></div><div class="tag-stack"><span class="tag ${early?'completed-early':''}">${early?'Completed Early':'Completed'}</span><span class="tag payment paid">Paid</span></div></div><div class="card-actions"><button class="mini confirm-card" data-confirmation="${b.id}">Confirmation PNG</button></div></article>`;
+  }).join(''):`<div class="empty">${showAllCompleted?'No fully settled completed sessions yet.':'No fully settled sessions completed today.'}</div>`;
 }
 $('#toggleCompletedSessions')?.addEventListener('click',()=>{showAllCompleted=!showAllCompleted;loadCompletedSessions()});
 $('#savePaymentBtn').onclick=savePayment;
@@ -137,7 +192,7 @@ async function savePayment(){
   if(error)return toast(error.message);
   $('#paymentDialog').close();
   toast('Payment recorded.');
-  await Promise.all([loadBookings(),loadPaymentFollowups(),loadClients()]);
+  await Promise.all([loadBookings(),loadPaymentFollowups(),loadCompletedSessions(),loadClients()]);
   window.dispatchEvent(new CustomEvent('coach:data-changed',{detail:{type:'payment',bookingId:b.id}}));
 }
 const manualBookingState={slots:new Map(),autoAmount:0,rateOverridden:false};
