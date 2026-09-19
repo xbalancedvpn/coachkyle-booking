@@ -114,24 +114,25 @@ async function openConfirmationCard(id){
     $('#bookingConfirmationDialog').showModal();
   }catch(e){toast(e.message||'Could not create confirmation card.')}
 }
-function opsIsAndroid(){return /Android/i.test(navigator.userAgent||'')}
 function opsBlobToDataUrl(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error||new Error('Could not prepare image.'));r.readAsDataURL(blob)})}
 async function saveBlob(blob,name){
   if(!blob)return false;
-  const file=new File([blob],name,{type:'image/png'});
-  if(opsIsAndroid()&&navigator.canShare?.({files:[file]})){
-    try{toast('Choose Files, Photos, or your file manager to save the PNG.');await navigator.share({title:'Save Coach Kyle Booking Confirmation',files:[file]});return true}
-    catch(e){if(e?.name==='AbortError')return true;console.warn(e)}
+  try{
+    const dataUrl=await opsBlobToDataUrl(blob),a=document.createElement('a');
+    a.href=dataUrl;
+    a.download=name;
+    a.rel='noopener';
+    a.style.display='none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>a.remove(),1200);
+    toast('PNG download started.');
+    return true;
+  }catch(e){
+    console.warn(e);
+    toast('Direct download was blocked by this browser. Use Share instead.');
+    return false;
   }
-  try{
-    if(!opsIsAndroid()&&window.showSaveFilePicker){
-      const handle=await window.showSaveFilePicker({suggestedName:name,types:[{description:'PNG image',accept:{'image/png':['.png']}}]});
-      const writable=await handle.createWritable();await writable.write(blob);await writable.close();toast('Booking confirmation saved.');return true;
-    }
-  }catch(e){if(e?.name==='AbortError')return true;console.warn(e)}
-  try{
-    const dataUrl=await opsBlobToDataUrl(blob),a=document.createElement('a');a.href=dataUrl;a.download=name;a.style.display='none';document.body.appendChild(a);a.click();setTimeout(()=>a.remove(),1000);toast('PNG download started.');return true;
-  }catch(e){console.warn(e);toast('Could not download directly. Use Share to save the PNG.');return false}
 }
 function wireConfirmation(){
   document.addEventListener('click',e=>{const b=e.target.closest('[data-confirmation]');if(b)openConfirmationCard(b.dataset.confirmation)});
