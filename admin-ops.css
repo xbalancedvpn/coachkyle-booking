@@ -20,3 +20,9 @@
   .report-custom-dates,.report-filter-row{grid-template-columns:1fr}
   .admin-flow-heading{margin-top:26px}
 }
+
+.payment-followup-panel{border-color:#3a3210}
+.followup-count{display:grid;place-items:center;min-width:42px;height:42px;padding:0 10px;border-radius:999px;background:#2a250b;color:#ffd600;font-weight:900}
+.payment-followup-card{scroll-margin-top:90px;transition:border-color .2s,box-shadow .2s,transform .2s}
+.payment-followup-card:target{border-color:#ffd600;box-shadow:0 0 0 2px rgba(255,214,0,.18),0 0 28px rgba(255,214,0,.16);transform:translateY(-2px)}
+.payment-followup-card .meta strong{color:#ffd600}
