@@ -207,3 +207,54 @@
 .completed-session-card{border-color:#23452f}
 .completed-session-card .tag.payment.paid{background:#11371e;color:#8cffab}
 @media(max-width:620px){.completed-head-actions{width:100%;justify-content:space-between}}
+
+.admin-footer-credit{padding:22px 5vw 34px;color:#616161;text-align:center;font-size:10px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}
+.request-ref{color:#6f6f6f;font-size:10px;font-weight:800}
+.tag.completed-early{background:#3b2b0d;color:#ffd56e}
+.panel,.card,.metrics article,.dialog-card{min-width:0;box-sizing:border-box}
+.card-top>*{min-width:0}
+.meta,.card h3,.panel-note{overflow-wrap:anywhere}
+.card-actions button,.dialog-actions button,.booking-head-actions button,.client-panel-controls button{max-width:100%;white-space:normal}
+@media(max-width:760px){
+  .wrap{padding:24px 14px 58px}
+  .top{padding:10px 12px;gap:8px}
+  .top>div{min-width:0}
+  .top img{max-width:40px;height:40px}
+  #adminEmail{display:none}
+  #logoutBtn{display:none}
+  .hero{align-items:stretch;flex-direction:column}
+  .hero .primary{width:100%}
+  .metrics{grid-template-columns:1fr 1fr}
+  .panel{padding:14px;border-radius:14px}
+  .panel-head{align-items:stretch;flex-direction:column}
+  .panel h2{font-size:27px}
+  .card-top{flex-direction:column}
+  .tag-stack{align-items:flex-start;flex-direction:row;flex-wrap:wrap}
+  .card-actions{display:grid;grid-template-columns:1fr 1fr}
+  .card-actions button{width:100%;min-width:0}
+  .slots{grid-template-columns:1fr 1fr}
+  .client-grid{grid-template-columns:1fr}
+  .client-panel-controls{width:100%;display:grid;grid-template-columns:1fr}
+  .search-input{max-width:none}
+  dialog{width:calc(100% - 16px);max-width:none;margin:auto}
+  .dialog-card{padding:16px;max-height:92vh;overflow:auto}
+  .dialog-card h2{font-size:28px;padding-right:32px}
+  .dialog-actions{display:grid;grid-template-columns:1fr}
+  .dialog-actions button{width:100%}
+  .payment-stats{grid-template-columns:1fr}
+  .booking-head-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}
+  .booking-head-actions button{width:100%;min-width:0}
+}
+@media(max-width:430px){
+  .metrics{grid-template-columns:1fr}
+  .card-actions{grid-template-columns:1fr}
+  .booking-head-actions{grid-template-columns:1fr}
+  .slots{grid-template-columns:1fr 1fr}
+  .top .admin-head-actions{gap:5px}
+  .admin-menu-btn,.admin-notify-btn,.admin-quick-btn{width:38px;height:38px;flex:0 0 38px}
+}
+@media(max-width:340px){
+  .wrap{padding-left:9px;padding-right:9px}
+  .panel{padding:11px}
+  .slots{grid-template-columns:1fr}
+}
