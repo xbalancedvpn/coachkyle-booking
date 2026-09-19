@@ -9,6 +9,9 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 function toast(msg){const t=$('#toast');if(!t)return alert(msg);t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000)}
 function today(){return ymd(new Date())}
 function firstOfMonth(){const d=new Date();return ymd(new Date(d.getFullYear(),d.getMonth(),1))}
+function lastOfMonth(){const d=new Date();return ymd(new Date(d.getFullYear(),d.getMonth()+1,0))}
+function currentWeekRange(){const d=new Date(),day=d.getDay(),diff=day===0?-6:1-day,m=new Date(d);m.setDate(d.getDate()+diff);const s=new Date(m),e=new Date(m);e.setDate(s.getDate()+6);return [ymd(s),ymd(e)]}
+function prettyDate(s){return new Date(s+'T12:00:00').toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}
 function sessionSizeLabel(n){n=Number(n||1);return n===1?'1-on-1':`+${n-1} (${n} pax)`}
 function paymentState(row){
   if(row.paid<=0)return 'unpaid';
@@ -226,12 +229,27 @@ function exportCsv(){
   rows.forEach(r=>lines.push([r.session_date,r.client_name,`${hour(r.start_hour)}-${hour(r.end_hour)}`,r.participant_count,r.session_status,r.total,r.paid,r.balance,paymentState(r)].map(csvEscape).join(',')));
   const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8'});saveBlob(blob,`coach-kyle-income-${$('#reportFrom').value}-to-${$('#reportTo').value}.csv`);
 }
+function setReportPeriod(period,load=true){
+  const from=$('#reportFrom'),to=$('#reportTo'),custom=$('#reportCustomDates'),label=$('#reportPeriodLabel');
+  if(!from||!to)return;
+  let a=from.value,b=to.value,title='Custom';
+  if(period==='today'){a=b=today();title='Today'}
+  else if(period==='week'){[a,b]=currentWeekRange();title='This Week'}
+  else if(period==='month'){a=firstOfMonth();b=lastOfMonth();title='This Month'}
+  from.value=a;to.value=b;
+  custom?.classList.toggle('is-hidden',period!=='custom');
+  document.querySelectorAll('[data-report-period]').forEach(btn=>btn.classList.toggle('active',btn.dataset.reportPeriod===period));
+  if(label)label.textContent=(period==='custom'?'Custom Range':title)+' • '+prettyDate(a)+' – '+prettyDate(b);
+  if(load&&period!=='custom')loadReport();
+}
 function wireReport(){
   if(!$('#reportFrom'))return;
-  $('#reportFrom').value=firstOfMonth();$('#reportTo').value=today();
-  $('#generateIncomeReport').addEventListener('click',loadReport);
-  $('#reportStatus').addEventListener('change',()=>{if(reportRows.length){renderReportTable(reportRows.filter(r=>reportFilterMatch(r,$('#reportStatus').value)));}});
+  $('#reportFrom').value=firstOfMonth();$('#reportTo').value=lastOfMonth();
+  document.querySelectorAll('[data-report-period]').forEach(btn=>btn.addEventListener('click',()=>setReportPeriod(btn.dataset.reportPeriod,true)));
+  $('#generateIncomeReport').addEventListener('click',()=>{const a=$('#reportFrom').value,b=$('#reportTo').value;if(a&&b)$('#reportPeriodLabel').textContent='Custom Range • '+prettyDate(a)+' – '+prettyDate(b);loadReport()});
+  $('#reportStatus').addEventListener('change',()=>{if(reportRows.length){const shown=reportRows.filter(r=>reportFilterMatch(r,$('#reportStatus').value));renderReportTable(shown);$('#reportRangeLabel').textContent=$('#reportFrom').value+' to '+$('#reportTo').value+' • '+shown.length+' of '+reportRows.length+' sessions';}});
   $('#exportIncomeCsv').addEventListener('click',exportCsv);
+  setReportPeriod('month',false);
   loadReport();
 }
 function init(){
