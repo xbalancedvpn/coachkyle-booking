@@ -26,3 +26,9 @@
 .payment-followup-card{scroll-margin-top:90px;transition:border-color .2s,box-shadow .2s,transform .2s}
 .payment-followup-card:target{border-color:#ffd600;box-shadow:0 0 0 2px rgba(255,214,0,.18),0 0 28px rgba(255,214,0,.16);transform:translateY(-2px)}
 .payment-followup-card .meta strong{color:#ffd600}
+
+.admin-nav{overflow-y:auto}
+.admin-nav-logout-wrap{margin-top:22px;padding:16px 8px 4px;border-top:1px solid #242424}
+.admin-nav-logout{width:100%;padding:12px 13px;border:1px solid #3a2727;border-radius:10px;background:#171010;color:#ffaaaa;font:inherit;font-weight:900;text-align:left;cursor:pointer}
+.admin-nav-logout:hover{border-color:#c94a4a;background:#241313;color:#fff}
+.admin-nav-logout:disabled{opacity:.55;cursor:wait}
