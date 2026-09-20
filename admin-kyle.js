@@ -95,6 +95,7 @@ async function loadBookings(){
   if(error){
     $('#bookings').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
     $('#todayBookings').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+    if($('#pastSessionsList'))$('#pastSessionsList').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
     return;
   }
   const ids=(data||[]).map(b=>b.id);
@@ -110,23 +111,30 @@ async function loadBookings(){
   });
   const todays=rows.filter(b=>b.session_date===today&&(b.session_status!=='completed'||b.balance>0.001));
   const upcoming=rows.filter(b=>b.session_date>today&&b.session_status!=='completed');
+  const pastPending=rows
+    .filter(b=>b.session_date<today&&b.session_status!=='completed')
+    .sort((a,b)=>String(b.session_date||'').localeCompare(String(a.session_date||''))||Number(a.start_hour||0)-Number(b.start_hour||0));
   $('#metricToday').textContent=String(todays.length);
   $('#metricBookings').textContent=String(upcoming.length);
   $('#metricBalance').textContent=money(rows.reduce((s,b)=>s+b.balance,0));
-  renderBookings(upcoming,todays);
+  if($('#pastSessionsCount'))$('#pastSessionsCount').textContent=String(pastPending.length);
+  renderBookings(upcoming,todays,pastPending);
 }
 function isSessionEarly(b){const now=new Date(),d=ymd(now);if(String(b.session_date)>d)return true;if(String(b.session_date)<d)return false;const end=Number(b.end_hour||0),nowHour=now.getHours()+(now.getMinutes()/60);return end>nowHour}
-function bookingCard(b,todayMode=false){
+function bookingCard(b,todayMode=false,pastMode=false){
   const paid=Number(b.paid??paymentTotals.get(b.id)??0),total=Number(b.total_amount||0),bal=Math.max(0,total-paid),payState=bal<=0?'Paid':paid>0?'Partial':'Unpaid',done=b.session_status==='completed',early=!done&&isSessionEarly(b),completedEarly=wasCompletedEarly(b),completeLabel=early?'Complete Early':'Mark Completed';
   const completionBtn=!done?`<button class="mini confirm" data-complete="${b.id}">${completeLabel}</button>`:'';
   const paymentBtn=bal>0?`<button class="mini" data-payment="${b.id}">Record Payment</button>`:'';
-  const stateLabel=completedEarly?'Completed Early':(b.session_status||'scheduled');
-  return `<article class="card booking-card" id="booking-card-${b.id}"><div class="card-top"><div><h3>${esc(b.client_name)}</h3><div class="meta">${esc(b.session_date)} • ${hour(b.start_hour)}–${hour(b.end_hour)}<br>${b.participant_count} player${b.participant_count>1?'s':''} • ${money(total)}<br>${esc(b.contact||'No contact')}</div></div><div class="tag-stack"><span class="tag ${completedEarly?'completed-early':''}">${esc(stateLabel)}</span><span class="tag payment ${payState.toLowerCase()}">${payState}${bal?` • ${money(bal)} due`:''}</span></div></div><div class="card-actions">${completionBtn}${paymentBtn}<button class="mini confirm-card" data-confirmation="${b.id}">Confirmation PNG</button><button class="mini danger" data-cancel-booking="${b.id}">Cancel Booking</button></div></article>`;
+  const stateLabel=pastMode&&!done?'Past • Needs Completion':completedEarly?'Completed Early':(b.session_status||'scheduled');
+  const cardClass=pastMode?' past-session-card':'';
+  const stateClass=pastMode&&!done?' past-due':completedEarly?' completed-early':'';
+  return `<article class="card booking-card${cardClass}" id="booking-card-${b.id}"><div class="card-top"><div><h3>${esc(b.client_name)}</h3><div class="meta">${esc(b.session_date)} • ${hour(b.start_hour)}–${hour(b.end_hour)}<br>${b.participant_count} player${b.participant_count>1?'s':''} • ${money(total)}<br>${esc(b.contact||'No contact')}</div></div><div class="tag-stack"><span class="tag${stateClass}">${esc(stateLabel)}</span><span class="tag payment ${payState.toLowerCase()}">${payState}${bal?` • ${money(bal)} due`:''}</span></div></div><div class="card-actions">${completionBtn}${paymentBtn}<button class="mini confirm-card" data-confirmation="${b.id}">Confirmation PNG</button><button class="mini danger" data-cancel-booking="${b.id}">Cancel Booking</button></div></article>`;
 }
-function renderBookings(upcoming,todays){
-  $('#todayBookings').innerHTML=todays.length?todays.map(b=>bookingCard(b,true)).join(''):'<div class="empty">No coaching sessions need attention today.</div>';
-  $('#bookings').innerHTML=upcoming.length?upcoming.map(b=>bookingCard(b,false)).join(''):'<div class="empty">No upcoming confirmed bookings.</div>';
-  [...upcoming,...todays].forEach(b=>{
+function renderBookings(upcoming,todays,pastPending=[]){
+  $('#todayBookings').innerHTML=todays.length?todays.map(b=>bookingCard(b,true,false)).join(''):'<div class="empty">No coaching sessions need attention today.</div>';
+  $('#bookings').innerHTML=upcoming.length?upcoming.map(b=>bookingCard(b,false,false)).join(''):'<div class="empty">No upcoming confirmed bookings.</div>';
+  if($('#pastSessionsList'))$('#pastSessionsList').innerHTML=pastPending.length?pastPending.map(b=>bookingCard(b,false,true)).join(''):'<div class="empty">No past sessions need completion.</div>';
+  [...upcoming,...todays,...pastPending].forEach(b=>{
     document.querySelectorAll(`[data-cancel-booking="${b.id}"]`).forEach(x=>x.onclick=()=>cancelBooking(b));
     document.querySelectorAll(`[data-payment="${b.id}"]`).forEach(x=>x.onclick=()=>openPayment(b));
     document.querySelectorAll(`[data-complete="${b.id}"]`).forEach(x=>x.onclick=()=>setSessionStatus(b,'completed'));
@@ -290,7 +298,9 @@ async function openManualBooking(prefill=null){
   $('#manualBookingForm').reset();
   $('#manualBookingClient').value='';
   const now=ymd(new Date());
-  $('#manualBookingDate').min=now;$('#manualBookingDate').value=prefill?.date||now;$('#manualBookingPaymentDate').value=now;
+  $('#manualBookingDate').removeAttribute('min');
+  $('#manualBookingDate').value=prefill?.date||now;
+  $('#manualBookingPaymentDate').value=prefill?.date&&prefill.date<now?prefill.date:now;
   $('#manualBookingPlayers').value=String(Math.max(1,Math.min(12,Number(prefill?.players)||1)));
   $('#manualBookingName').value=prefill?.name||'';
   $('#manualBookingContact').value=prefill?.contact||'';
@@ -344,10 +354,15 @@ async function saveManualBooking(e){
       const {error:pe}=await db.from('booking_payments').insert({booking_id:bookingId,amount:payment,paid_at:paidAt,payment_method:$('#manualBookingPaymentMethod').value,note:'Recorded during manual booking',source:'manual'});
       if(pe)throw pe;
     }
+    const isPast=date<ymd(new Date());
     closeManualBooking();
-    toast('Manual booking created and schedule blocked.');
+    toast(isPast?'Past session created. Mark it completed to add it to Earned Income.':'Manual booking created and schedule blocked.');
     await loadAll();
-    setTimeout(()=>document.querySelector(`[data-confirmation="${bookingId}"]`)?.click(),150);
+    if(isPast){
+      setTimeout(()=>document.querySelector('#pastSessionsSection')?.scrollIntoView({behavior:'smooth',block:'start'}),120);
+    }else{
+      setTimeout(()=>document.querySelector(`[data-confirmation="${bookingId}"]`)?.click(),150);
+    }
   }catch(err){
     if(bookingId){
       await db.from('booking_payments').delete().eq('booking_id',bookingId);
@@ -431,7 +446,11 @@ function wireManualBooking(){
   $('#adminManualBookingLink')?.addEventListener('click',e=>{e.preventDefault();openManualBooking()});
   $('#closeManualBooking')?.addEventListener('click',closeManualBooking);
   $('#cancelManualBooking')?.addEventListener('click',closeManualBooking);
-  $('#manualBookingDate')?.addEventListener('change',loadManualBookingAvailability);
+  $('#manualBookingDate')?.addEventListener('change',async()=>{
+    const d=$('#manualBookingDate').value,now=ymd(new Date()),paymentDate=$('#manualBookingPaymentDate');
+    if(paymentDate&&d&&d<now)paymentDate.value=d;
+    await loadManualBookingAvailability();
+  });
   $('#manualBookingStart')?.addEventListener('change',updateManualBookingEndOptions);
   $('#manualBookingEnd')?.addEventListener('change',()=>syncManualAutoRate());
   $('#manualBookingPlayers')?.addEventListener('change',()=>{renderManualParticipantFields();syncManualAutoRate()});
