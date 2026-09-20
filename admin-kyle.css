@@ -258,3 +258,6 @@
   .panel{padding:11px}
   .slots{grid-template-columns:1fr}
 }
+
+.admin-footer-credit{display:flex;flex-direction:column;gap:4px;align-items:center}
+.admin-footer-credit span{display:block}
