@@ -1,5 +1,5 @@
-const CACHE_NAME="coach-booking-template-v145-fresh-share-links";
-const STATIC_ASSETS=["./","./index.html","./admin.html","./site.webmanifest","./brand-placeholder.svg","./coach-placeholder.svg"];
+const CACHE_NAME="coach-booking-template-v146-root-launcher";
+const STATIC_ASSETS=["./","./index.html","./booking.html","./admin.html","./site.webmanifest","./brand-placeholder.svg","./coach-placeholder.svg"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(STATIC_ASSETS)).catch(()=>{}));self.skipWaiting();});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE_NAME).map(k=>caches.delete(k)))));self.clients.claim();});
 async function networkFirst(req){try{const r=await fetch(req);if(r&&r.ok){const copy=r.clone();caches.open(CACHE_NAME).then(c=>c.put(req,copy));}return r;}catch(err){const cached=await caches.match(req);if(cached)return cached;throw err;}}
