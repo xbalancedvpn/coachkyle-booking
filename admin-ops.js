@@ -129,7 +129,7 @@ async function openConfirmationCard(id){
     let y=515;for(const [k,v] of rows){ctx.fillStyle='#777';ctx.font='800 16px Arial';ctx.fillText(k,110,y);ctx.fillStyle=k==='PAYMENT'?'#FFD600':'#fff';ctx.font='900 25px Arial';ctx.fillText(v,330,y);y+=62}
     ctx.fillStyle='#aaa';ctx.font='700 18px Arial';ctx.fillText('COURT FEE',110,945);ctx.fillStyle='#fff';ctx.font='900 24px Arial';ctx.fillText('Not included',330,945);
     rounded(ctx,72,1000,936,150,24);ctx.fillStyle='#101010';ctx.fill();ctx.fillStyle='#FFD600';ctx.font='900 20px Arial';ctx.fillText('COACH KYLE',105,1050);ctx.fillStyle='#ddd';ctx.font='700 18px Arial';ctx.fillText('Pickleball Coaching • Santiago City',105,1085);ctx.fillStyle='#888';ctx.font='700 16px Arial';ctx.fillText('Please message Coach Kyle on Facebook for changes or questions.',105,1120);
-    ctx.fillStyle='#555';ctx.font='700 15px Arial';ctx.fillText('Generated from Coach Kyle Booking System',72,1288);ctx.textAlign='right';ctx.fillStyle='#666';ctx.font='700 13px Arial';ctx.fillText('© 2026 XBALANCED DIGITAL SOLUTIONS',1008,1312);ctx.textAlign='left';
+    ctx.fillStyle='#555';ctx.font='700 15px Arial';ctx.fillText('Generated from Coach Kyle Booking System',72,1278);ctx.textAlign='center';ctx.fillStyle='#666';ctx.font='700 13px Arial';ctx.fillText('© 2026 XBALANCED DIGITAL SOLUTIONS',540,1305);ctx.fillText('Developed by ELDWIN GASPAR',540,1325);ctx.textAlign='left';
     confirmationBlob=await new Promise(r=>canvas.toBlob(r,'image/png',1));
     $('#bookingConfirmationDialog').showModal();
   }catch(e){toast(e.message||'Could not create confirmation card.')}
