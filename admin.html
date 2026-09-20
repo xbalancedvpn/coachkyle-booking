@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#070707">
   <title>Coach Kyle Admin</title>
   <link rel="icon" type="image/webp" href="assets/coach-kyle-favicon.webp?v=4">
-  <link rel="stylesheet" href="admin-kyle.css?v=16">
+  <link rel="stylesheet" href="admin-kyle.css?v=17">
   <link rel="stylesheet" href="progress-card.css?v=1">
   <link rel="stylesheet" href="rating-ui-fix.css?v=2">
   <link rel="stylesheet" href="weekly-schedule.css?v=1">
@@ -38,7 +38,7 @@
   <section class="panel"><div class="panel-head"><div><span class="eyebrow">HOMEPAGE MEDIA</span><h2>Photo carousel</h2><p class="panel-note">Manual upload only. Add, hide, delete, reorder, and optionally caption homepage photos.</p></div><button id="refreshMediaBtn" class="ghost" type="button">Refresh</button></div><form id="galleryUploadForm" class="media-upload"><label>Image<input id="galleryFile" type="file" accept="image/jpeg,image/png,image/webp" required></label><label>Optional caption<textarea id="galleryCaption" rows="2" maxlength="180" placeholder="Optional caption"></textarea></label><button id="galleryUploadBtn" class="primary" type="submit">Upload to Carousel</button></form><div id="galleryAdminList" class="media-items"><div class="empty">Loading gallery…</div></div></section>
   <section class="panel"><div class="panel-head"><div><span class="eyebrow">TESTIMONIALS</span><h2>Review & approval</h2><p class="panel-note">Public submissions stay private until you approve them.</p></div></div><h3>Pending approval</h3><div id="testimonialPending" class="media-items"><div class="empty">Loading pending testimonials…</div></div><h3 style="margin-top:24px">Reviewed</h3><div id="testimonialPublished" class="media-items"><div class="empty">Loading testimonials…</div></div></section>
 </section>
-</main><footer class="admin-footer-credit">Powered by XBALANCED DIGITAL SOLUTIONS</footer></section>
+</main><footer class="admin-footer-credit"><span>© 2026 XBALANCED DIGITAL SOLUTIONS</span><span>Developed by Eldwin Gaspar</span></footer></section>
 <dialog id="pasteBookingDialog" class="paste-booking-dialog"><div class="dialog-card"><button class="x" id="closePasteBooking" type="button">×</button><span class="eyebrow">MESSENGER BOOKING</span><h2>Paste Booking Request</h2><p class="confirm-meta">Paste the booking message copied from the public site. The system will extract the client, date, time, players, goal, and fee, then open Manual Booking for review.</p><label>Client message<textarea id="pasteBookingText" rows="12" placeholder="Paste the full Coach Kyle booking request here…"></textarea></label><div id="pasteBookingStatus" class="manual-availability">Waiting for a booking request.</div><div class="dialog-actions"><button id="cancelPasteBooking" class="ghost" type="button">Cancel</button><button id="parseBookingRequest" class="primary" type="button">Parse & Fill Booking</button></div></div></dialog>
 <dialog id="manualBookingDialog" class="manual-booking-dialog"><form id="manualBookingForm" class="dialog-card manual-booking-card"><button class="x" id="closeManualBooking" type="button">×</button><span class="eyebrow">ADMIN BOOKING</span><h2>Manual Booking</h2><p class="confirm-meta">Create a confirmed booking for a client who booked through Messenger, phone, or in person. Available hours only are shown and the schedule is checked again before saving.</p>
 <div class="manual-booking-grid">
@@ -108,10 +108,10 @@
 <dialog id="blockReasonDialog"><div class="dialog-card"><button class="x" id="closeBlockReason" type="button">×</button><span class="eyebrow">COACH SCHEDULE</span><h2>Block This Hour</h2><div id="blockReasonTime" class="confirm-meta"></div><label>Reason<select id="blockReason"><option value="Coach Unavailable">Coach Unavailable</option><option value="Training">Training</option><option value="Tournament">Tournament</option><option value="Personal Schedule">Personal Schedule</option><option value="Rest Day">Rest Day</option><option value="Other">Other</option></select></label><label id="blockReasonOtherWrap" style="display:none">Other reason<input id="blockReasonOther" type="text" maxlength="80" placeholder="Short reason"></label><label class="block-public-toggle"><input id="blockReasonPublic" type="checkbox" checked> Show this reason publicly (no private details)</label><div class="dialog-actions"><button id="cancelBlockReason" class="ghost" type="button">Cancel</button><button id="saveBlockReason" class="primary" type="button">Block Hour</button></div></div></dialog>
 <dialog id="weeklyScheduleDialog" class="weekly-card-dialog"><div class="dialog-card weekly-card-wrap"><button class="x" id="closeWeeklySchedule" type="button">×</button><span class="eyebrow">PUBLIC SCHEDULE</span><h2>Weekly Availability Card</h2><canvas id="weeklyScheduleCanvas" class="weekly-card-preview" width="1800" height="1350"></canvas><div class="weekly-card-actions"><button id="saveWeeklySchedule" class="save" type="button">Save PNG</button><button id="shareWeeklySchedule" class="share" type="button">Share to Messenger / Apps</button><button id="closeWeeklyScheduleBottom" class="close" type="button">Close</button></div></div></dialog>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="admin-kyle.js?v=24"></script>
-<script src="progress-card.js?v=10"></script>
-<script src="weekly-schedule.js?v=10"></script>
+<script src="admin-kyle.js?v=25"></script>
+<script src="progress-card.js?v=11"></script>
+<script src="weekly-schedule.js?v=11"></script>
 <script src="post-session.js?v=1"></script>
 <script src="admin-media.js?v=2"></script>
-<script src="admin-ops.js?v=15"></script>
+<script src="admin-ops.js?v=16"></script>
 </body></html>
