@@ -32,3 +32,9 @@
 .admin-nav-logout{width:100%;padding:12px 13px;border:1px solid #3a2727;border-radius:10px;background:#171010;color:#ffaaaa;font:inherit;font-weight:900;text-align:left;cursor:pointer}
 .admin-nav-logout:hover{border-color:#c94a4a;background:#241313;color:#fff}
 .admin-nav-logout:disabled{opacity:.55;cursor:wait}
+
+/* Past sessions queue */
+.past-sessions-panel{border-color:#4b3b17}
+.past-sessions-panel .past-count{background:#3a2d0b;color:#ffd86d}
+.past-session-card{border-color:#4a3a15;scroll-margin-top:90px}
+.tag.past-due{background:#3b2b0d;color:#ffd56e}
