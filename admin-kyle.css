@@ -261,3 +261,7 @@
 
 .admin-footer-credit{display:flex;flex-direction:column;gap:4px;align-items:center}
 .admin-footer-credit span{display:block}
+
+.admin-footer-credit{text-transform:none}
+.admin-footer-credit span:first-child{text-transform:uppercase}
+.admin-footer-credit strong{text-transform:uppercase;font-weight:900}
