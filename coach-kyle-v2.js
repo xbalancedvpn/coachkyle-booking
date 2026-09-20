@@ -45,9 +45,18 @@
     players.value=String(current);
   }
 
-  function slotInfo(h){return scheduleMap.get(`${dateInput.value}|${h}`)||{status:'available',notes:''}}
+  function slotInfo(h){return scheduleMap.get(`${dateInput.value}|${h}`)||{status:'available',notes:'',publicReason:''}}
   function slotStatus(h){return slotInfo(h).status||'available'}
-  function slotPublicReason(h){const note=String(slotInfo(h).notes||'');return note.startsWith('PUBLIC:')?note.slice(7).trim():''}
+  function slotPublicReason(h){
+    const info=slotInfo(h);
+    const publicReason=String(info.publicReason||'').trim();
+    if(publicReason){
+      if(publicReason.startsWith('PRIVATE:'))return '';
+      return publicReason.startsWith('PUBLIC:')?publicReason.slice(7).trim():publicReason;
+    }
+    const note=String(info.notes||'').trim();
+    return note.startsWith('PUBLIC:')?note.slice(7).trim():'';
+  }
   function isSlotOpen(h){return h>=CONFIG.startHour&&h<CONFIG.endHour&&slotStatus(h)==='available'}
   function isSelected(h){return selectedStart!==null&&selectedEnd!==null&&h>=selectedStart&&h<selectedEnd}
 
@@ -172,7 +181,11 @@
     try{
       const {data,error}=await db.from('public_schedule').select('*').eq('slot_date',dateInput.value);
       if(error)throw error;
-      (data||[]).forEach(r=>scheduleMap.set(`${r.slot_date}|${Number(r.start_hour)}`,{status:r.status,notes:r.notes||r.public_reason||''}));
+      (data||[]).forEach(r=>scheduleMap.set(`${r.slot_date}|${Number(r.start_hour)}`,{
+        status:r.status,
+        notes:r.notes||'',
+        publicReason:r.public_reason||''
+      }));
       renderSlots();
       const open=[...Array(CONFIG.endHour-CONFIG.startHour)].filter((_,i)=>isSlotOpen(CONFIG.startHour+i)).length;
       status.className=open?'status ok':'status warn';
