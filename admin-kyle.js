@@ -173,7 +173,15 @@ async function loadCompletedSessions(){
     const paid=paidMap.get(b.id)||0,total=Number(b.total_amount||0);
     return {...b,paid,balance:Math.max(0,total-paid)};
   }).filter(b=>b.balance<=0.001);
-  if(!showAllCompleted)rows=rows.filter(b=>completionDateKey(b)===today);
+  if(!showAllCompleted){
+    rows=rows.filter(b=>completionDateKey(b)===today)
+      .sort((a,b)=>Number(a.start_hour||0)-Number(b.start_hour||0));
+  }else{
+    rows.sort((a,b)=>{
+      const byDate=String(a.session_date||'').localeCompare(String(b.session_date||''));
+      return byDate||Number(a.start_hour||0)-Number(b.start_hour||0);
+    });
+  }
   if(count)count.textContent=String(rows.length);
   if(toggle)toggle.textContent=showAllCompleted?'Show Today Only':'Show All Completed';
   list.innerHTML=rows.length?rows.map(b=>{
