@@ -6,10 +6,11 @@
   const hourName=h=>`${h%12||12}:00 ${h<12?'AM':'PM'}`;
   const shortHour=h=>`${h%12||12}${h<12?'am':'pm'}`;
 
-  let selectedStart=null,selectedEnd=null,scheduleMap=new Map(),submittedSignature=null,pendingRequestRef=null,requestVersion=0,hasSubmitted=false;
+  let selectedStart=null,selectedEnd=null,scheduleMap=new Map(),submittedSignature=null,pendingRequestRef=null,requestVersion=0,hasSubmitted=false,availabilityLoading=false,lastAvailabilityRefresh=0;
 
   const dateInput=$('#date'),slots=$('#hourSlots'),players=$('#players'),status=$('#availabilityStatus'),summary=$('#requestSummary');
-  const db=window.supabase?.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey);
+  const noStoreFetch=(input,init={})=>fetch(input,{...init,cache:'no-store'});
+  const db=window.supabase?.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey,{global:{fetch:noStoreFetch}});
 
   function nav(){
     const btn=$('#menuBtn'),nav=$('#nav');
@@ -164,40 +165,86 @@
     }
   }
 
-  async function loadAvailability(){
-    selectedStart=null;
-    selectedEnd=null;
-    status.className='status';
-    status.textContent='Checking live availability…';
-    scheduleMap=new Map();
-    renderSlots();
+  async function loadAvailability({preserveSelection=false,quiet=false}={}){
+    if(availabilityLoading)return false;
+    availabilityLoading=true;
+    const previousStart=selectedStart,previousEnd=selectedEnd;
+    let selectionChanged=false;
+
+    if(!preserveSelection){
+      selectedStart=null;
+      selectedEnd=null;
+      scheduleMap=new Map();
+      renderSlots();
+    }
+
+    if(!quiet){
+      status.className='status';
+      status.textContent='Checking live availability…';
+    }
 
     if(!db){
+      availabilityLoading=false;
       status.className='status warn';
-      status.textContent='Live schedule could not load. You can still send Coach Kyle a request through Messenger.';
-      return;
+      status.textContent='Live schedule could not load. Please refresh the schedule before sending a request.';
+      return false;
     }
 
     try{
-      const {data,error}=await db.from('public_schedule').select('*').eq('slot_date',dateInput.value);
+      const {data,error}=await db
+        .from('public_schedule')
+        .select('slot_date,start_hour,status,public_reason')
+        .eq('slot_date',dateInput.value)
+        .order('start_hour');
       if(error)throw error;
-      (data||[]).forEach(r=>scheduleMap.set(`${r.slot_date}|${Number(r.start_hour)}`,{
+
+      const freshMap=new Map();
+      (data||[]).forEach(r=>freshMap.set(`${r.slot_date}|${Number(r.start_hour)}`,{
         status:r.status,
-        notes:r.notes||'',
+        notes:'',
         publicReason:r.public_reason||''
       }));
+      scheduleMap=freshMap;
+
+      if(preserveSelection&&previousStart!==null&&previousEnd!==null){
+        selectedStart=previousStart;
+        selectedEnd=previousEnd;
+        if(!selectedRangeAvailable()){
+          selectedStart=null;
+          selectedEnd=null;
+          selectionChanged=true;
+        }
+      }
+
       renderSlots();
+      lastAvailabilityRefresh=Date.now();
+      const updated=$('#availabilityUpdated');
+      if(updated)updated.textContent='Live • updated just now';
+
       const open=[...Array(CONFIG.endHour-CONFIG.startHour)].filter((_,i)=>isSlotOpen(CONFIG.startHour+i)).length;
-      status.className=open?'status ok':'status warn';
-      status.textContent=open
-        ? `${open} coaching hour${open===1?'':'s'} currently open. Tap one or more consecutive available hours.`
-        : 'No open coaching hours on this date. Choose another date.';
+      if(selectionChanged){
+        status.className='status warn';
+        status.textContent='The schedule changed and your selected hours are no longer available. Please choose another time.';
+      }else if(selectedStart!==null&&selectedEnd!==null){
+        status.className='status ok';
+        status.textContent=`${durationHours()} hour${durationHours()===1?'':'s'} selected • ${hourName(selectedStart)} to ${hourName(selectedEnd)}. Live schedule refreshed.`;
+      }else{
+        status.className=open?'status ok':'status warn';
+        status.textContent=open
+          ? `${open} coaching hour${open===1?'':'s'} currently open. Tap one or more consecutive available hours.`
+          : 'No open coaching hours on this date. Choose another date.';
+      }
+      updateSummary();
+      return true;
     }catch(e){
-      renderSlots();
-      status.className='status warn';
-      status.textContent='Live schedule is temporarily unavailable. You can still send Coach Kyle a request and he will confirm it.';
+      if(!quiet){
+        status.className='status warn';
+        status.textContent='Live schedule could not refresh. Please try again before sending a request.';
+      }
+      return false;
+    }finally{
+      availabilityLoading=false;
     }
-    updateSummary();
   }
 
   function splitName(v){
@@ -292,6 +339,13 @@ Please confirm if this schedule is available. Thank you!`;
 
   async function copyAndOpen(){
     if(!validate())return;
+    const refreshed=await loadAvailability({preserveSelection:true,quiet:true});
+    if(!refreshed){
+      status.className='status warn';
+      status.textContent='Could not verify the latest schedule. Tap Refresh schedule and try again.';
+      return;
+    }
+    if(!validate())return;
     ensureRequestRef();
     const text=message(Math.max(1,requestVersion||1));
     await copyText(text);
@@ -301,6 +355,13 @@ Please confirm if this schedule is available. Thank you!`;
   }
 
   async function sendRequest(){
+    if(!validate())return;
+    const refreshed=await loadAvailability({preserveSelection:true,quiet:true});
+    if(!refreshed){
+      status.className='status warn';
+      status.textContent='Could not verify the latest schedule. Tap Refresh schedule and try again.';
+      return;
+    }
     if(!validate())return;
     const updating=hasSubmitted;
     ensureRequestRef();
@@ -363,8 +424,20 @@ Please confirm if this schedule is available. Thank you!`;
     $('#copyMessenger').onclick=copyAndOpen;
     $('#sendRequest').onclick=sendRequest;
     $('#startNewRequest')?.addEventListener('click',startNewRequest);
+    $('#refreshAvailability')?.addEventListener('click',()=>loadAvailability({preserveSelection:true}));
     $('#scrollBooking').onclick=()=>$('#booking').scrollIntoView({behavior:'smooth'});
     $('#scrollRates').onclick=()=>$('#rates').scrollIntoView({behavior:'smooth'});
+
+    const refreshWhenVisible=()=>{
+      if(document.hidden)return;
+      if(Date.now()-lastAvailabilityRefresh<5000)return;
+      loadAvailability({preserveSelection:true,quiet:true});
+    };
+    window.addEventListener('pageshow',refreshWhenVisible);
+    window.addEventListener('focus',refreshWhenVisible);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshWhenVisible()});
+    setInterval(()=>{if(!document.hidden&&Date.now()-lastAvailabilityRefresh>=30000)loadAvailability({preserveSelection:true,quiet:true})},30000);
+
     loadAvailability();updateSummary();
   }
 
