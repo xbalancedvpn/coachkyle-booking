@@ -43,7 +43,23 @@ function showAdmin(session){$('#loginView').classList.add('hidden');$('#adminVie
 function showLogin(){$('#adminView').classList.add('hidden');$('#loginView').classList.remove('hidden')}
 async function init(){const {data:{session}}=await db.auth.getSession();session?showAdmin(session):showLogin()}
 $('#loginForm').addEventListener('submit',async e=>{e.preventDefault();$('#loginError').textContent='';const {data,error}=await db.auth.signInWithPassword({email:$('#email').value.trim(),password:$('#password').value});if(error)return $('#loginError').textContent=error.message;showAdmin(data.session)});
-$('#logoutBtn').onclick=async()=>{await db.auth.signOut();showLogin()};
+async function logoutAdmin(){
+  const buttons=[$('#logoutBtn'),$('#logoutNavBtn')].filter(Boolean);
+  buttons.forEach(b=>{b.disabled=true});
+  const {error}=await db.auth.signOut();
+  if(error){
+    buttons.forEach(b=>{b.disabled=false});
+    return toast(error.message||'Could not sign out.');
+  }
+  $('#adminNav')?.classList.remove('open');
+  $('#adminNavBackdrop')?.classList.remove('open');
+  $('#adminMenuBtn')?.setAttribute('aria-expanded','false');
+  if(location.hash)history.replaceState(null,'',location.pathname+location.search);
+  showLogin();
+  buttons.forEach(b=>{b.disabled=false});
+}
+$('#logoutBtn')?.addEventListener('click',logoutAdmin);
+$('#logoutNavBtn')?.addEventListener('click',logoutAdmin);
 $('#refreshBtn').onclick=loadAll;$('#scheduleDate').addEventListener('change',loadSchedule);$('#clientSearch').addEventListener('input',renderClientList);
 async function loadAll(){await Promise.all([loadInquiries(),loadBookings(),loadPaymentFollowups(),loadCompletedSessions(),loadSchedule(),loadClients()])}
 async function loadInquiries(){
