@@ -108,3 +108,10 @@
 .xbalanced-credit{text-transform:none!important}
 .xbalanced-credit span:first-child{text-transform:uppercase}
 .xbalanced-credit strong{text-transform:uppercase;font-weight:900}
+
+/* Live availability refresh */
+.availability-tools{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-4px 0 14px}
+.schedule-refresh{border:1px solid #d2d2d2;background:#fff;color:#333;border-radius:9px;padding:8px 10px;font:inherit;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;cursor:pointer}
+.schedule-refresh:hover{border-color:#111;color:#111}
+#availabilityUpdated{color:#777;font-size:10px;font-weight:800}
+@media(max-width:430px){.availability-tools{align-items:stretch;flex-direction:column}.schedule-refresh{width:100%}#availabilityUpdated{text-align:center}}
