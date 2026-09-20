@@ -12,6 +12,19 @@
   const noStoreFetch=(input,init={})=>fetch(input,{...init,cache:'no-store'});
   const db=window.supabase?.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey,{global:{fetch:noStoreFetch}});
 
+  function ensureFreshMessengerNavigation(){
+    const ua=String(navigator.userAgent||'');
+    const ref=String(document.referrer||'');
+    const inMetaBrowser=/FBAN|FBAV|FB_IAB|Messenger|Instagram/i.test(ua)||/facebook\.com|messenger\.com|m\.me/i.test(ref);
+    if(!inMetaBrowser)return false;
+    const u=new URL(location.href);
+    if(u.searchParams.has('live'))return false;
+    u.searchParams.set('live',Date.now().toString(36));
+    u.hash='booking';
+    location.replace(u.toString());
+    return true;
+  }
+
   function nav(){
     const btn=$('#menuBtn'),nav=$('#nav');
     if(!btn||!nav)return;
@@ -417,6 +430,7 @@ Please confirm if this schedule is available. Thank you!`;
   }
 
   function wire(){
+    if(ensureFreshMessengerNavigation())return;
     nav();buildPlayerOptions();minDate();renderSlots();
     dateInput.addEventListener('change',()=>{resetSubmittedRequest();loadAvailability()});
     players.addEventListener('change',()=>{resetSubmittedRequest();updateSummary()});
