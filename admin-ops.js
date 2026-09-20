@@ -7,6 +7,37 @@ const pad=n=>String(n).padStart(2,'0'),ymd=d=>`${d.getFullYear()}-${pad(d.getMon
 const hour=h=>`${h%12||12}:00 ${h<12?'AM':'PM'}`;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(msg){const t=$('#toast');if(!t)return alert(msg);t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000)}
+function freshBookingLink(){
+  const u=new URL('./',location.href);
+  u.search='';
+  u.searchParams.set('live',Date.now().toString(36));
+  u.hash='booking';
+  return u.toString();
+}
+async function shareFreshBookingLink(){
+  const url=freshBookingLink();
+  if(navigator.share){
+    try{
+      await navigator.share({
+        title:'Coach Kyle Pickleball Coaching',
+        text:'Check Coach Kyle’s live coaching schedule and send your booking request:',
+        url
+      });
+      return;
+    }catch(e){
+      if(e?.name==='AbortError')return;
+    }
+  }
+  try{
+    await navigator.clipboard.writeText(url);
+    toast('Fresh booking link copied. Send this link in Messenger.');
+  }catch{
+    const ta=document.createElement('textarea');
+    ta.value=url;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();
+    toast('Fresh booking link copied. Send this link in Messenger.');
+  }
+}
 function today(){return ymd(new Date())}
 function firstOfMonth(){const d=new Date();return ymd(new Date(d.getFullYear(),d.getMonth(),1))}
 function lastOfMonth(){const d=new Date();return ymd(new Date(d.getFullYear(),d.getMonth()+1,0))}
@@ -292,6 +323,7 @@ function wireReport(){
 }
 function init(){
   wireAdminMenu();wireNotifications();wireConfirmation();wireReport();
+  $('#shareBookingLinkBtn')?.addEventListener('click',shareFreshBookingLink);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadNotifications()});
   window.addEventListener('coach:data-changed',()=>{loadNotifications();if(reportRows.length)loadReport()});
   document.addEventListener('click',e=>{
