@@ -491,10 +491,13 @@ async function loadSchedule(){
     const extraClass=st==='unavailable'?` block-${reasonKey}`:'';
     html+=`<button class="slot ${st}${extraClass}" data-hour="${h}" ${st==='booked'?'disabled':''}><span class="slot-time">${shortHour(h)} to ${shortHour(h+1)}</span><small class="slot-status${badgeClass}">${esc(detail)}</small></button>`;
   }
-  $('#scheduleSlots').innerHTML=html;
-  $('#scheduleSlots .slot:not([disabled])').forEach(btn=>{
-    btn.onclick=()=>toggleSlot(d,Number(btn.dataset.hour),map.get(Number(btn.dataset.hour)));
-  });
+  const scheduleRoot=$('#scheduleSlots');
+  scheduleRoot.innerHTML=html;
+  scheduleRoot.onclick=e=>{
+    const btn=e.target.closest('.slot:not([disabled])');
+    if(!btn||!scheduleRoot.contains(btn))return;
+    toggleSlot(d,Number(btn.dataset.hour),map.get(Number(btn.dataset.hour)));
+  };
 }
 function openBlockReason(date,h){
   pendingBlockSlot={date:date,h:h};
