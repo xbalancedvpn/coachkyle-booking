@@ -1,4 +1,4 @@
-const CACHE_NAME="coach-booking-template-v139-footer-case";
+const CACHE_NAME="coach-booking-template-v140-admin-logout";
 const STATIC_ASSETS=["./","./index.html","./admin.html","./site.webmanifest","./brand-placeholder.svg","./coach-placeholder.svg"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(STATIC_ASSETS)).catch(()=>{}));self.skipWaiting();});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE_NAME).map(k=>caches.delete(k)))));self.clients.claim();});
