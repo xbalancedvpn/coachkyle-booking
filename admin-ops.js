@@ -79,7 +79,7 @@ async function loadNotifications(){
       parts.push(`<div class="notify-group"><h4>New inquiries <span>${latestInq.length}</span></h4>${latestInq.slice(0,6).map(x=>`<a href="#inquiriesSection"><strong>${esc(x.client_name)}</strong><small>${esc(x.preferred_date||'No date')} • ${x.start_hour==null?'No time':hour(x.start_hour)+'–'+hour(x.end_hour)}</small></a>`).join('')}</div>`);
     }
     if(unpaid.length){
-      parts.push(`<div class="notify-group"><h4>Completed • payment pending <span>${unpaid.length}</span></h4>${unpaid.slice(0,6).map(x=>{const target=x.session_date===today()?'#booking-card-'+x.id:'#payment-followup-'+x.id;return `<a href="${target}"><strong>${esc(x.client_name)}</strong><small>${esc(x.session_date)} • ${money(Number(x.total_amount||0)-x.paid)} due</small></a>`}).join('')}</div>`);
+      parts.push(`<div class="notify-group"><h4>Completed • payment pending <span>${unpaid.length}</span></h4>${unpaid.slice(0,6).map(x=>`<a href="#" data-payment-notify="${x.id}"><strong>${esc(x.client_name)}</strong><small>${esc(x.session_date)} • ${money(Number(x.total_amount||0)-x.paid)} due</small></a>`).join('')}</div>`);
     }
     list.innerHTML=parts.length?parts.join(''):'<div class="notify-empty">No items need attention.</div>';
     $('#attentionInquiries').textContent=String(latestInq.length);
@@ -87,10 +87,31 @@ async function loadNotifications(){
     $('#attentionPanel')?.classList.toggle('has-alerts',total>0);
   }catch(e){console.warn(e);list.innerHTML='<div class="notify-empty">Could not refresh notifications.</div>'}
 }
+function focusPaymentDue(id){
+  const todayCard=document.querySelector(`#todayBookings #booking-card-${CSS.escape(String(id))}`);
+  const followupCard=document.getElementById(`payment-followup-${id}`);
+  const target=todayCard||followupCard;
+  if(!target){
+    document.getElementById('paymentFollowupSection')?.scrollIntoView({behavior:'smooth',block:'start'});
+    return;
+  }
+  target.classList.remove('attention-highlight');
+  void target.offsetWidth;
+  target.classList.add('attention-highlight');
+  target.scrollIntoView({behavior:'smooth',block:'center'});
+  setTimeout(()=>target.classList.remove('attention-highlight'),2600);
+}
 function wireNotifications(){
   const btn=$('#adminNotifyBtn'),panel=$('#adminNotifyPanel');
   if(!btn||!panel)return;
   btn.addEventListener('click',e=>{e.stopPropagation();panel.classList.toggle('open')});
+  panel.addEventListener('click',e=>{
+    const payment=e.target.closest('[data-payment-notify]');
+    if(!payment)return;
+    e.preventDefault();
+    panel.classList.remove('open');
+    focusPaymentDue(payment.dataset.paymentNotify);
+  });
   document.addEventListener('click',e=>{if(!e.target.closest('#adminNotifyWrap'))panel.classList.remove('open')});
   loadNotifications();
   notifyTimer=setInterval(loadNotifications,60000);
@@ -129,7 +150,7 @@ async function openConfirmationCard(id){
     let y=515;for(const [k,v] of rows){ctx.fillStyle='#777';ctx.font='800 16px Arial';ctx.fillText(k,110,y);ctx.fillStyle=k==='PAYMENT'?'#FFD600':'#fff';ctx.font='900 25px Arial';ctx.fillText(v,330,y);y+=62}
     ctx.fillStyle='#aaa';ctx.font='700 18px Arial';ctx.fillText('COURT FEE',110,945);ctx.fillStyle='#fff';ctx.font='900 24px Arial';ctx.fillText('Not included',330,945);
     rounded(ctx,72,1000,936,150,24);ctx.fillStyle='#101010';ctx.fill();ctx.fillStyle='#FFD600';ctx.font='900 20px Arial';ctx.fillText('COACH KYLE',105,1050);ctx.fillStyle='#ddd';ctx.font='700 18px Arial';ctx.fillText('Pickleball Coaching • Santiago City',105,1085);ctx.fillStyle='#888';ctx.font='700 16px Arial';ctx.fillText('Please message Coach Kyle on Facebook for changes or questions.',105,1120);
-    ctx.fillStyle='#555';ctx.font='700 15px Arial';ctx.fillText('Generated from Coach Kyle Booking System',72,1278);ctx.textAlign='center';ctx.fillStyle='#666';ctx.font='700 13px Arial';ctx.fillText('© 2026 XBALANCED DIGITAL SOLUTIONS',540,1305);ctx.fillText('Developed by ELDWIN GASPAR',540,1325);ctx.textAlign='left';
+    ctx.fillStyle='#555';ctx.font='700 15px Arial';ctx.fillText('Generated from Coach Kyle Booking System',72,1278);ctx.textAlign='center';ctx.fillStyle='#666';ctx.font='700 13px Arial';ctx.fillText('© 2026 XBALANCED DIGITAL SOLUTIONS',540,1322);ctx.textAlign='left';
     confirmationBlob=await new Promise(r=>canvas.toBlob(r,'image/png',1));
     $('#bookingConfirmationDialog').showModal();
   }catch(e){toast(e.message||'Could not create confirmation card.')}
