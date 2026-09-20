@@ -459,9 +459,21 @@ wireManualBooking();
 
 async function cancelBooking(b){if(!confirm(`Cancel booking for ${b.client_name}?`))return;const {error}=await db.from('bookings').update({status:'cancelled',session_status:'cancelled',cancelled_at:new Date().toISOString()}).eq('id',b.id);if(error)return toast(error.message);await db.from('schedule_slots').delete().eq('booking_id',b.id);toast('Booking cancelled and hours reopened.');await loadAll();window.dispatchEvent(new CustomEvent('coach:data-changed',{detail:{type:'booking-cancelled',bookingId:b.id}}))}
 let pendingBlockSlot=null;
-function publicBlockReason(note){
-  const s=String(note||'');
-  return s.startsWith('PUBLIC:')?s.slice(7).trim():'';
+function adminBlockReason(note){
+  const s=String(note||'').trim();
+  if(!s)return 'Coach Unavailable';
+  if(s.startsWith('PUBLIC:'))return s.slice(7).trim()||'Coach Unavailable';
+  if(s.startsWith('PRIVATE:'))return s.slice(8).trim()||'Coach Unavailable';
+  return s;
+}
+function blockReasonKey(reason){
+  const s=String(reason||'').trim().toLowerCase();
+  if(s==='training')return 'training';
+  if(s==='tournament')return 'tournament';
+  if(s==='personal schedule')return 'personal';
+  if(s==='rest day')return 'rest';
+  if(s==='coach unavailable')return 'unavailable';
+  return 'other';
 }
 async function loadSchedule(){
   const d=$('#scheduleDate').value||ymd(new Date());
@@ -471,12 +483,16 @@ async function loadSchedule(){
   if(d===ymd(new Date()))$('#metricBlocked').textContent=(data||[]).filter(r=>r.status==='unavailable').length;
   let html='';
   for(let h=8;h<22;h++){
-    const r=map.get(h),st=r?.status||'available',reason=publicBlockReason(r?.notes);
-    const detail=st==='unavailable'?(reason||'Coach Unavailable'):st==='booked'?'Booked':'Available';
-    html+=`<button class="slot ${st}" data-hour="${h}" ${st==='booked'?'disabled':''}><span class="slot-time">${shortHour(h)} to ${shortHour(h+1)}</span><small>${esc(detail)}</small></button>`;
+    const r=map.get(h),st=r?.status||'available';
+    const reason=st==='unavailable'?adminBlockReason(r?.notes):'';
+    const reasonKey=st==='unavailable'?blockReasonKey(reason):'';
+    const detail=st==='unavailable'?reason:st==='booked'?'Booked':'Available';
+    const badgeClass=st==='unavailable'?` block-reason-badge reason-${reasonKey}`:'';
+    const extraClass=st==='unavailable'?` block-${reasonKey}`:'';
+    html+=`<button class="slot ${st}${extraClass}" data-hour="${h}" ${st==='booked'?'disabled':''}><span class="slot-time">${shortHour(h)} to ${shortHour(h+1)}</span><small class="slot-status${badgeClass}">${esc(detail)}</small></button>`;
   }
   $('#scheduleSlots').innerHTML=html;
-  $$('#scheduleSlots .slot:not([disabled])').forEach(btn=>{
+  $('#scheduleSlots .slot:not([disabled])').forEach(btn=>{
     btn.onclick=()=>toggleSlot(d,Number(btn.dataset.hour),map.get(Number(btn.dataset.hour)));
   });
 }
