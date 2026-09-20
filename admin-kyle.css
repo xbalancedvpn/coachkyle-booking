@@ -265,3 +265,6 @@
 .admin-footer-credit{text-transform:none}
 .admin-footer-credit span:first-child{text-transform:uppercase}
 .admin-footer-credit strong{text-transform:uppercase;font-weight:900}
+
+.attention-highlight{border-color:#ffd600!important;box-shadow:0 0 0 2px rgba(255,214,0,.38),0 0 28px rgba(255,214,0,.18);animation:attentionPulse 1.15s ease-in-out 2}
+@keyframes attentionPulse{0%,100%{transform:translateZ(0);box-shadow:0 0 0 2px rgba(255,214,0,.38),0 0 24px rgba(255,214,0,.15)}50%{box-shadow:0 0 0 4px rgba(255,214,0,.6),0 0 34px rgba(255,214,0,.28)}}
