@@ -85,3 +85,7 @@
   .slot-grid{grid-template-columns:1fr}
   .contact-bar{padding-left:14px;padding-right:14px}
 }
+
+.xbalanced-credit{display:flex;flex-direction:column;gap:3px;align-items:flex-end;text-align:right}
+.xbalanced-credit span{display:block}
+@media(max-width:760px){.xbalanced-credit{align-items:flex-start;text-align:left}}
