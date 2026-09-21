@@ -509,7 +509,7 @@ async function saveManualBooking(e){
     if(ce)throw ce;if(conflicts?.length)throw new Error('One or more selected hours are no longer available. Please choose another time.');
     const selectedClient=clientCache.find(x=>String(x.id)===String($('#manualBookingClient').value));
     const primary=selectedClient||await findOrCreateClient({full_name:name,contact:contact||null});
-    const {data:b,error:be}=await db.from('bookings').insert({session_date:date,start_hour:start,end_hour:end,client_name:name,contact:contact||null,participant_count:players,coaching_type:players===1?'1-on-1':`${players} Players`,rate_mode:manualBookingState.rateOverridden?'manual_override':'standard',rate_per_person:players?amount/players:amount,total_amount:amount,court_name:court,notes:$('#manualBookingNote').value.trim()||null,status:'confirmed',session_status:'scheduled',client_id:primary.id}).select('id').single();
+    const {data:b,error:be}=await db.from('bookings').insert({session_date:date,start_hour:start,end_hour:end,client_name:name,contact:contact||null,participant_count:players,coaching_type:players===1?'1-on-1':`${players} Players`,rate_mode:manualBookingState.rateOverridden?'custom':'standard',rate_per_person:players?amount/players:amount,total_amount:amount,court_name:court,notes:$('#manualBookingNote').value.trim()||null,status:'confirmed',session_status:'scheduled',client_id:primary.id}).select('id').single();
     if(be)throw be;bookingId=b.id;
     const pRows=[{booking_id:bookingId,client_id:primary.id,participant_order:1,first_name:primary.first_name||splitFullName(name).first,last_name:primary.last_name||splitFullName(name).last,full_name:name,contact:contact||null,contact_key:contact?contact.toLowerCase():null,is_primary:true}];
     for(let i=2;i<=players;i++){
@@ -529,7 +529,9 @@ async function saveManualBooking(e){
     const isPast=date<ymd(new Date());
     closeManualBooking();
     toast(isPast?'Past session created. Mark it completed to add it to Earned Income.':'Manual booking created and schedule blocked.');
+    if($('#scheduleDate'))$('#scheduleDate').value=date;
     await loadAll();
+    await loadSchedule();
     if(isPast){
       setTimeout(()=>document.querySelector('#pastSessionsSection')?.scrollIntoView({behavior:'smooth',block:'start'}),120);
     }else{
