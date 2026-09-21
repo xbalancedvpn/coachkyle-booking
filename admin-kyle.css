@@ -284,3 +284,10 @@
 #scheduleSlots .reason-personal{background:#4a2b0d;color:#ffd29c;border:1px solid #87511d}
 #scheduleSlots .reason-rest{background:#252525;color:#e0e0e0;border:1px solid #555}
 #scheduleSlots .reason-other{background:#401717;color:#ffbcbc;border:1px solid #773535}
+
+
+/* Compact admin list previews: show 3 by default, expand on demand */
+.list-preview-hidden{display:none!important}
+.list-toggle-row{display:flex;justify-content:center;margin-top:14px}
+.list-toggle-row .ghost{min-width:128px}
+@media(max-width:640px){.list-toggle-row .ghost{width:100%}}
