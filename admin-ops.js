@@ -262,12 +262,11 @@ async function loadReport(){
 }
 function renderReportTable(rows){
   if(!rows.length){$('#reportTable').innerHTML='<div class="empty">No sessions match this report filter.</div>';return}
-  const toggle=rows.length>3?`<div class="report-list-toggle"><button class="ghost" type="button" aria-expanded="false" onclick="var b=this.closest('.report-table-block');var e=b.classList.toggle('show-all');this.textContent=e?'Show Less':'Show All';this.setAttribute('aria-expanded',e?'true':'false');">Show All</button></div>`:'';
-  $('#reportTable').innerHTML=`<div class="report-table-block"><div class="report-table-scroll"><table class="report-table"><thead><tr><th>Date</th><th>Client</th><th>Size</th><th>Session</th><th>Fee</th><th>Paid</th><th>Balance</th><th>Collection</th></tr></thead><tbody>${rows.map(r=>{
+  $('#reportTable').innerHTML=`<div class="report-table-scroll"><table class="report-table"><thead><tr><th>Date</th><th>Client</th><th>Size</th><th>Session</th><th>Fee</th><th>Paid</th><th>Balance</th><th>Collection</th></tr></thead><tbody>${rows.map(r=>{
     const ps=paymentState(r),advance=isAdvance(r);
     const label=ps==='paid'?(advance?'Paid • Prepayment':r.session_status==='completed'?'Paid • Done':'Paid'):ps==='partial'?'Partial':'Not collected';
     return `<tr><td>${esc(r.session_date)}</td><td><strong>${esc(r.client_name)}</strong><small>${hour(r.start_hour)}–${hour(r.end_hour)}</small></td><td>${esc(sessionSizeLabel(r.participant_count))}</td><td><span class="report-pill ${esc(r.session_status)}">${esc(r.session_status)}</span></td><td>${money(r.total)}</td><td>${money(r.paid)}</td><td>${money(r.balance)}</td><td><span class="report-pill ${ps}">${label}</span></td></tr>`;
-  }).join('')}</tbody></table></div>${toggle}</div>`;
+  }).join('')}</tbody></table></div>`;
 }
 function barChart(canvas,labels,values,formatter=v=>String(v)){
   const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0b0b0b';ctx.fillRect(0,0,w,h);
