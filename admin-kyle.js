@@ -233,7 +233,25 @@ if(reqMeta.ref){
 }
 $('#confirmDialog').close();toast('Booking confirmed. Client profiles updated.');
 window.dispatchEvent(new CustomEvent('coach:data-changed',{detail:{type:'booking-confirmed',bookingId:b.id,inquiryId:i.id}}));
-try{await loadAll()}catch(uiErr){console.warn('Booking confirmed but admin refresh failed',uiErr);toast('Booking confirmed. Refresh the admin page to reload the lists.')}
+try{
+  await loadAll();
+
+  if(String(i.preferred_date||'')>ymd(new Date())){
+    listPreviewState.upcoming=true;
+    applyListPreview('#bookings','.booking-card','#toggleUpcomingBookings','upcoming');
+  }
+
+  const confirmationBtn=document.querySelector(`[data-confirmation="${CSS.escape(String(b.id))}"]`);
+  if(confirmationBtn){
+    confirmationBtn.scrollIntoView({behavior:'smooth',block:'center'});
+    setTimeout(()=>confirmationBtn.click(),180);
+  }else{
+    toast('Booking confirmed. Use Show All in Upcoming Bookings if you need to view it.');
+  }
+}catch(uiErr){
+  console.warn('Booking confirmed but admin refresh failed',uiErr);
+  toast('Booking confirmed. Refresh the admin page to reload the lists.');
+}
 }catch(e){
   await db.from('schedule_slots').update({status:'available',client_name:null,contact:null,coaching_type:null,rate:null,booking_id:null}).eq('booking_id',b.id);
   await db.from('booking_participants').delete().eq('booking_id',b.id);
