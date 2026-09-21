@@ -121,6 +121,9 @@ async function loadNotifications(){
 function focusPaymentDue(id){
   const todayCard=document.querySelector(`#todayBookings #booking-card-${CSS.escape(String(id))}`);
   const followupCard=document.getElementById(`payment-followup-${id}`);
+  if(followupCard?.classList.contains('list-preview-hidden')){
+    document.getElementById('togglePaymentFollowups')?.click();
+  }
   const target=todayCard||followupCard;
   if(!target){
     document.getElementById('paymentFollowupSection')?.scrollIntoView({behavior:'smooth',block:'start'});
