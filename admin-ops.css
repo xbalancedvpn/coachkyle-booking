@@ -38,3 +38,10 @@
 .past-sessions-panel .past-count{background:#3a2d0b;color:#ffd86d}
 .past-session-card{border-color:#4a3a15;scroll-margin-top:90px}
 .tag.past-due{background:#3b2b0d;color:#ffd56e}
+
+
+/* Compact financial report table: show first 3 sessions by default */
+.report-table-block:not(.show-all) .report-table tbody > tr:nth-child(n+4){display:none}
+.report-list-toggle{display:flex;justify-content:center;margin-top:14px}
+.report-list-toggle .ghost{min-width:128px}
+@media(max-width:640px){.report-list-toggle .ghost{width:100%}}
