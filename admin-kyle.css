@@ -285,8 +285,14 @@
 #scheduleSlots .reason-rest{background:#252525;color:#e0e0e0;border:1px solid #555}
 #scheduleSlots .reason-other{background:#401717;color:#ffbcbc;border:1px solid #773535}
 
-
-/* Compact admin list previews: show 3 by default, expand on demand */
+/* Compact admin lists: CSS-enforced first 3 items, independent of admin JS */
+#bookings.compact-list:not(.show-all) > .booking-card:nth-child(n+4),
+#pastSessionsList.compact-list:not(.show-all) > .booking-card:nth-child(n+4),
+#paymentFollowupList.compact-list:not(.show-all) > .payment-followup-card:nth-child(n+4),
+#completedSessionsList.compact-list:not(.show-all) > .completed-session-card:nth-child(n+4),
+#clients.compact-list:not(.show-all) > .client-card:nth-child(n+4){
+  display:none!important;
+}
 .list-preview-hidden{display:none!important}
 .list-toggle-row{display:flex;justify-content:center;margin-top:14px}
 .list-toggle-row .ghost{min-width:128px}
