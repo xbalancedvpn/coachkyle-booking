@@ -89,7 +89,122 @@ $('#togglePastSessions')?.addEventListener('click',()=>toggleListPreview('#pastS
 $('#togglePaymentFollowups')?.addEventListener('click',()=>toggleListPreview('#paymentFollowupList','.payment-followup-card','#togglePaymentFollowups','payment'));
 $('#toggleCompletedSessions')?.addEventListener('click',()=>toggleListPreview('#completedSessionsList','.completed-session-card','#toggleCompletedSessions','completed'));
 $('#toggleClientProfiles')?.addEventListener('click',()=>toggleListPreview('#clients','.client-card','#toggleClientProfiles','clients'));
-async function loadAll(){await Promise.all([loadInquiries(),loadBookings(),loadPaymentFollowups(),loadCompletedSessions(),loadSchedule(),loadClients()])}
+async function repairConfirmedOrphanBookings(){
+  const today=ymd(new Date());
+  const {data:inquiries,error:ie}=await db.from('inquiries')
+    .select('*')
+    .eq('status','confirmed')
+    .gte('preferred_date',today)
+    .order('created_at',{ascending:false})
+    .limit(100);
+  if(ie||!inquiries?.length)return;
+
+  for(const i of inquiries){
+    if(i.start_hour==null||i.end_hour==null||!i.preferred_date)continue;
+
+    const {data:existing,error:be}=await db.from('bookings')
+      .select('id')
+      .eq('status','confirmed')
+      .eq('session_date',i.preferred_date)
+      .eq('start_hour',i.start_hour)
+      .eq('end_hour',i.end_hour)
+      .ilike('client_name',i.client_name)
+      .limit(1);
+    if(be||existing?.length)continue;
+
+    const {data:slots,error:se}=await db.from('schedule_slots')
+      .select('*')
+      .eq('slot_date',i.preferred_date)
+      .gte('start_hour',i.start_hour)
+      .lt('start_hour',i.end_hour)
+      .order('start_hour');
+    if(se)continue;
+
+    const expected=Math.max(1,Number(i.end_hour)-Number(i.start_hour));
+    const orphan=(slots||[]).filter(s=>
+      s.status==='booked' &&
+      !s.booking_id &&
+      String(s.client_name||'').trim().toLowerCase()===String(i.client_name||'').trim().toLowerCase()
+    );
+    if(orphan.length!==expected)continue;
+
+    const {data:participants,error:pe}=await db.from('inquiry_participants')
+      .select('*')
+      .eq('inquiry_id',i.id)
+      .order('participant_order');
+    if(pe)continue;
+
+    const amount=Number(i.quoted_rate||orphan[0]?.rate||0);
+    const pc=Number(i.participant_count||participants?.length||1);
+    let bookingId=null;
+    try{
+      let primaryClientId=null;
+      const clientRows=[];
+      for(const p of (participants||[])){
+        const c=await findOrCreateClient(p);
+        if(p.is_primary||Number(p.participant_order)===1)primaryClientId=c.id;
+        clientRows.push({client:c,participant:p});
+      }
+
+      const {data:b,error:insertErr}=await db.from('bookings').insert({
+        session_date:i.preferred_date,
+        start_hour:i.start_hour,
+        end_hour:i.end_hour,
+        client_name:i.client_name,
+        contact:i.contact,
+        participant_count:pc,
+        coaching_type:i.coaching_type||`${pc} Player${pc>1?'s':''}`,
+        rate_mode:'standard',
+        rate_per_person:pc?amount/pc:amount,
+        total_amount:amount,
+        court_name:courtFromSource(i)||null,
+        notes:i.notes||null,
+        status:'confirmed',
+        session_status:'scheduled',
+        client_id:primaryClientId
+      }).select('id').single();
+      if(insertErr)throw insertErr;
+      bookingId=b.id;
+
+      if(clientRows.length){
+        const bp=clientRows.map(({client:c,participant:p})=>({
+          booking_id:bookingId,
+          client_id:c.id,
+          participant_order:p.participant_order,
+          first_name:p.first_name,
+          last_name:p.last_name,
+          full_name:p.full_name,
+          contact:p.contact||null,
+          contact_key:p.contact_key||null,
+          is_primary:!!p.is_primary
+        }));
+        const {error:bpe}=await db.from('booking_participants').insert(bp);
+        if(bpe)throw bpe;
+      }
+
+      const {error:slotErr}=await db.from('schedule_slots')
+        .update({booking_id:bookingId})
+        .eq('slot_date',i.preferred_date)
+        .gte('start_hour',i.start_hour)
+        .lt('start_hour',i.end_hour)
+        .is('booking_id',null);
+      if(slotErr)throw slotErr;
+
+      console.info('Recovered confirmed booking',bookingId,i.client_name);
+    }catch(err){
+      console.warn('Could not recover orphan booking',i?.id,err);
+      if(bookingId){
+        await db.from('booking_participants').delete().eq('booking_id',bookingId);
+        await db.from('bookings').delete().eq('id',bookingId);
+      }
+    }
+  }
+}
+
+async function loadAll(){
+  await repairConfirmedOrphanBookings();
+  await Promise.all([loadInquiries(),loadBookings(),loadPaymentFollowups(),loadCompletedSessions(),loadSchedule(),loadClients()]);
+}
 async function loadInquiries(){
   const {data,error}=await db.from('inquiries').select('*').in('status',['new','waiting','tentative']).order('created_at',{ascending:false}).limit(100);
   if(error)return $('#inquiries').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
@@ -116,7 +231,16 @@ if(reqMeta.ref){
   const stale=(siblings||[]).filter(x=>inquiryRequestMeta(x).ref===reqMeta.ref).map(x=>x.id);
   if(stale.length)await db.from('inquiries').update({status:'cancelled'}).in('id',stale);
 }
-$('#confirmDialog').close();toast('Booking confirmed. Client profiles updated.');await loadAll();window.dispatchEvent(new CustomEvent('coach:data-changed',{detail:{type:'booking-confirmed',bookingId:b.id,inquiryId:i.id}}))}catch(e){await db.from('booking_participants').delete().eq('booking_id',b.id);await db.from('bookings').delete().eq('id',b.id);toast(e.message||'Could not finish booking confirmation.') }}
+$('#confirmDialog').close();toast('Booking confirmed. Client profiles updated.');
+window.dispatchEvent(new CustomEvent('coach:data-changed',{detail:{type:'booking-confirmed',bookingId:b.id,inquiryId:i.id}}));
+try{await loadAll()}catch(uiErr){console.warn('Booking confirmed but admin refresh failed',uiErr);toast('Booking confirmed. Refresh the admin page to reload the lists.')}
+}catch(e){
+  await db.from('schedule_slots').update({status:'available',client_name:null,contact:null,coaching_type:null,rate:null,booking_id:null}).eq('booking_id',b.id);
+  await db.from('booking_participants').delete().eq('booking_id',b.id);
+  await db.from('bookings').delete().eq('id',b.id);
+  await db.from('inquiries').update({status:'new'}).eq('id',i.id);
+  toast(e.message||'Could not finish booking confirmation.');
+}}
 async function loadBookings(){
   const today=ymd(new Date());
   const {data,error}=await db.from('bookings').select('*').eq('status','confirmed').order('session_date').order('start_hour').limit(400);
