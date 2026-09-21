@@ -108,7 +108,7 @@
 
   function requestSignature(){
     const f=getForm();
-    return JSON.stringify([f.name,f.contact,f.date,f.start,f.end,f.players,f.goal]);
+    return JSON.stringify([f.name,f.contact,f.date,f.start,f.end,f.players,f.court,f.goal]);
   }
 
   function chooseHour(h){
@@ -280,6 +280,8 @@
       end:selectedEnd,
       duration:durationHours(),
       players:Number(players.value),
+      court:$('#court').value==='OTHERS'?$('#courtOther').value.trim():$('#court').value,
+      courtChoice:$('#court').value,
       goal:$('#goal').value
     };
   }
@@ -300,6 +302,7 @@ Duration: ${f.duration} hour${f.duration>1?'s':''}
 Pax: ${f.players}
 Hourly Coaching Rate: ₱${hourlyRate().toLocaleString('en-PH')}
 Estimated Coaching Fee: ₱${totalFee().toLocaleString('en-PH')}
+Court: ${f.court||'Not selected'}
 Goal: ${f.goal||'General coaching'}
 Court Fee: Not included
 Request Ref: ${ref}
@@ -319,6 +322,7 @@ Please confirm if this schedule is available. Thank you!`;
       parts.push('No hours selected');
     }
     parts.push(`${f.players} player${f.players>1?'s':''}`);
+    if(f.court)parts.push(`Court: ${f.court}`);
     parts.push(`₱${hourlyRate().toLocaleString('en-PH')}/hr`);
     if(f.duration>0)parts.push(`₱${totalFee().toLocaleString('en-PH')} total`);
     summary.innerHTML=`<strong>Current request</strong><br>${parts.join(' • ')}`;
@@ -345,6 +349,7 @@ Please confirm if this schedule is available. Thank you!`;
     const f=getForm();
     if(f.players<1||f.players>CONFIG.maxPlayers){alert(`Maximum ${CONFIG.maxPlayers} players per session.`);return false}
     if(!splitName(f.name)){alert('Please enter the booking name (first name and last name).');$('#name').focus();return false}
+    if(!f.court){alert('Please select a court. If you choose Others, enter the court name.');(f.courtChoice==='OTHERS'?$('#courtOther'):$('#court')).focus();return false}
     if(f.duration<1){alert('Please select at least one available hour.');return false}
     if(!selectedRangeAvailable()){alert('One or more selected hours are no longer available. Please choose another time range.');return false}
     return true;
@@ -396,9 +401,10 @@ Please confirm if this schedule is available. Thank you!`;
           p_source_text:text,
           p_goal_focus:f.goal||null,
           p_program_interest:null,
+          p_court_name:f.court,
           p_participants:participantList()
         };
-        const {error}=await db.rpc('submit_public_inquiry_v17d',payload);
+        const {error}=await db.rpc('submit_public_inquiry_v17e',payload);
         if(!error)sent=true;else console.warn(error);
       }catch(e){console.warn(e)}
     }
@@ -422,7 +428,7 @@ Please confirm if this schedule is available. Thank you!`;
   function startNewRequest(){
     pendingRequestRef=null;requestVersion=0;hasSubmitted=false;submittedSignature=null;
     selectedStart=null;selectedEnd=null;
-    $('#name').value='';$('#contact').value='';$('#players').value='1';$('#goal').selectedIndex=0;
+    $('#name').value='';$('#contact').value='';$('#players').value='1';$('#court').value='';$('#courtOther').value='';$('#courtOtherWrap').style.display='none';$('#goal').selectedIndex=0;
     renderSlots();updateSummary();
     status.className='status ok';
     status.textContent='New request started. Choose your preferred date and available hours.';
@@ -434,6 +440,8 @@ Please confirm if this schedule is available. Thank you!`;
     nav();buildPlayerOptions();minDate();renderSlots();
     dateInput.addEventListener('change',()=>{resetSubmittedRequest();loadAvailability()});
     players.addEventListener('change',()=>{resetSubmittedRequest();updateSummary()});
+    $('#court').addEventListener('change',()=>{const other=$('#court').value==='OTHERS';$('#courtOtherWrap').style.display=other?'block':'none';if(!other)$('#courtOther').value='';resetSubmittedRequest();updateSummary()});
+    $('#courtOther').addEventListener('input',()=>{resetSubmittedRequest();updateSummary()});
     ['name','contact','goal'].forEach(id=>$('#'+id).addEventListener('input',()=>{resetSubmittedRequest();updateSummary()}));
     $('#copyMessenger').onclick=copyAndOpen;
     $('#sendRequest').onclick=sendRequest;

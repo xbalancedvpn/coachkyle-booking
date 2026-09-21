@@ -178,6 +178,7 @@ async function openConfirmationCard(id){
       ['TIME',hour(b.start_hour)+' – '+hour(b.end_hour)],
       ['DURATION',(Number(b.end_hour)-Number(b.start_hour))+' hour'+(Number(b.end_hour)-Number(b.start_hour)>1?'s':'')],
       ['PLAYERS',String(b.participant_count||1)+' pax'],
+      ['COURT',String(b.court_name||'Not specified')],
       ['COACHING FEE',money(total)],
       ['PAYMENT',balance<=0?'Paid in full':paid>0?money(paid)+' paid • '+money(balance)+' balance':'Unpaid • '+money(balance)+' balance']
     ];
