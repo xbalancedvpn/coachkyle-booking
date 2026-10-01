@@ -1,4 +1,4 @@
-const CACHE_NAME="coach-booking-template-v146-root-launcher";
+const CACHE_NAME="coach-kyle-20261001-nlfix2";
 const STATIC_ASSETS=["./","./index.html","./booking.html","./admin.html","./site.webmanifest","./brand-placeholder.svg","./coach-placeholder.svg"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(STATIC_ASSETS)).catch(()=>{}));self.skipWaiting();});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE_NAME).map(k=>caches.delete(k)))));self.clients.claim();});
