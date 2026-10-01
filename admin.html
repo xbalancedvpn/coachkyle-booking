@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1">\n  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">\n  <meta http-equiv="Pragma" content="no-cache">\n  <meta http-equiv="Expires" content="0">
   <meta name="theme-color" content="#070707">
   <title>Coach Kyle Admin</title>
   <link rel="icon" type="image/webp" href="assets/coach-kyle-favicon.webp?v=4">
@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="post-session.css?v=1">
   <link rel="stylesheet" href="admin-media.css?v=1">
   <link rel="stylesheet" href="admin-ops.css?v=10">
-  <link rel="stylesheet" href="coach-kyle-date-picker.css?v=1">
+  <link rel="stylesheet" href="coach-kyle-date-picker.css?v=2">
 
 <style id="report-three-row-fix">
 #reportTable:not(.show-all) .report-table tbody > tr:nth-child(n+4){display:none!important}
@@ -70,7 +70,21 @@
 }
 </style>
 </head>
-<body>
+<body>\n<script id="stray-newline-cleanup">
+(function(){
+  function cleanStrayNewlines(){
+    Array.from(document.body.childNodes).forEach(function(node){
+      if(node.nodeType!==Node.TEXT_NODE)return;
+      var text=node.nodeValue||'';
+      if(/^(?:\s|\\n)+$/.test(text))node.remove();
+    });
+  }
+  cleanStrayNewlines();
+  var observer=new MutationObserver(cleanStrayNewlines);
+  observer.observe(document.body,{childList:true});
+  window.addEventListener('load',function(){cleanStrayNewlines();setTimeout(function(){observer.disconnect();},5000);},{once:true});
+})();
+</script>
 <div id="toast" class="toast"></div>
 <section id="loginView" class="auth"><div class="auth-card"><div class="auth-brand-stage"><div class="auth-brand-lines"></div><img src="assets/coach-kyle-main-logo.webp?v=7" alt="Coach Kyle main logo" class="auth-logo"><div class="auth-admin-label"><span></span><b>COACH ADMIN</b><span></span></div></div><h1>Manage your coaching.</h1><p>Sign in with your Coach Kyle admin account.</p><form id="loginForm"><label>Email<input id="email" type="email" autocomplete="email" required></label><label>Password<input id="password" type="password" autocomplete="current-password" required></label><button class="primary" type="submit">Sign In</button></form><small id="loginError"></small><a href="index.html" class="back">← Back to public site</a></div></section>
 <section id="adminView" class="hidden"><header class="top"><div class="admin-head-actions"><button id="adminMenuBtn" class="admin-menu-btn" type="button" aria-label="Open admin menu" aria-expanded="false">☰</button><a class="admin-top-brand" href="index.html" aria-label="Coach Kyle home"><img src="assets/coach-kyle-favicon.webp?v=4" alt="Coach Kyle"></a></div><div class="admin-head-actions"><button id="shareBookingLinkBtn" class="admin-quick-btn" type="button" aria-label="Share fresh booking link" title="Share Booking Link">🔗</button><button id="quickWeeklyScheduleBtn" class="admin-quick-btn" type="button" aria-label="Generate weekly availability" title="Weekly Availability">🗓️</button><div id="adminNotifyWrap" class="admin-notify-wrap"><button id="adminNotifyBtn" class="admin-notify-btn" type="button" aria-label="Notifications">🔔<span id="adminNotifyBadge" class="admin-notify-badge hidden-badge">0</span></button><div id="adminNotifyPanel" class="admin-notify-panel"><div id="adminNotifyList"><div class="notify-empty">Loading notifications…</div></div></div></div><span id="adminEmail"></span><button id="logoutBtn" class="ghost">Sign out</button></div></header><div id="adminNavBackdrop" class="admin-nav-backdrop"></div><aside id="adminNav" class="admin-nav"><h3>Admin Menu</h3><a href="#dashboardSection">Dashboard</a><div class="admin-nav-group">Operations</div><a href="#todaySection">Today's Sessions</a><a href="#inquiriesSection">Booking Inquiries</a><a href="#bookingsSection">Upcoming Bookings</a><a href="#pastSessionsSection">Past Sessions</a><a id="adminManualBookingLink" href="#bookingsSection">+ Manual Booking</a><a href="#paymentFollowupSection">Payment Follow-up</a><a href="#completedSessionsSection">Completed Sessions</a><a href="#scheduleSection">Schedule</a><div class="admin-nav-group">Clients</div><a href="#clientsSection">Client Profiles</a><div class="admin-nav-group">Finance</div><a href="#reportsSection">Income & Collection</a><div class="admin-nav-group">Public Content</div><a href="#weeklyScheduleSection">Weekly Availability</a><a href="#mediaSection">Carousel & Testimonials</a><div class="admin-nav-logout-wrap"><button id="logoutNavBtn" class="admin-nav-logout" type="button">Sign out</button></div></aside><main class="wrap">
@@ -170,7 +184,7 @@
 <script src="post-session.js?v=1"></script>
 <script src="admin-media.js?v=2"></script>
 <script src="admin-ops.js?v=25"></script>
-<script src="coach-kyle-date-picker.js?v=1"></script>
+<script src="coach-kyle-date-picker.js?v=2"></script>
 
 <script>
 (function(){
