@@ -1,0 +1,16 @@
+
+.edit-booking-dialog{border:0;padding:0;background:transparent;color:#fff;width:min(720px,calc(100vw - 24px));max-width:720px}
+.edit-booking-dialog::backdrop{background:rgba(0,0,0,.72);backdrop-filter:blur(3px)}
+.edit-booking-card{position:relative;background:#101010;border:1px solid #333;border-radius:20px;padding:22px;box-shadow:0 28px 80px rgba(0,0,0,.62)}
+.edit-booking-card h2{margin:5px 0 4px}.edit-booking-meta{color:#999;margin:0 0 14px;font-size:12px}
+.edit-booking-x{position:absolute;right:14px;top:14px;width:38px;height:38px;border:1px solid #333;border-radius:50%;background:#171717;color:#fff;font-size:24px}
+.edit-booking-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.edit-booking-grid label,.edit-booking-fee label{display:grid;gap:6px;color:#aaa;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em}
+.edit-booking-grid input,.edit-booking-grid select,.edit-booking-fee input{width:100%;min-height:46px;border:1px solid #333;border-radius:10px;background:#090909;color:#fff;padding:10px 12px}
+.edit-booking-grid input:focus,.edit-booking-grid select:focus,.edit-booking-fee input:focus{outline:0;border-color:#ffd600;box-shadow:0 0 0 3px rgba(255,214,0,.12)}
+.edit-booking-fee{margin-top:14px;padding:14px;border:1px solid #3a3212;border-radius:14px;background:#151207;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}
+.edit-booking-fee small,.edit-booking-fee strong{grid-column:1/-1}.edit-booking-fee small{color:#aaa}.edit-booking-fee strong{color:#ffd600;font-size:18px}
+.edit-booking-error{margin-top:12px;background:#301414;color:#ffb0b0;border:1px solid #5a2525;border-radius:10px;padding:10px 12px;font-size:11px}
+.edit-booking-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:15px}.edit-booking-actions button{min-width:120px}
+.edit-booking-toast{position:fixed;left:50%;bottom:92px;z-index:12000;transform:translate(-50%,16px);opacity:0;background:#111;color:#ffd600;border:1px solid #ffd600;border-radius:999px;padding:10px 16px;font-weight:900;transition:.2s;pointer-events:none}.edit-booking-toast.show{opacity:1;transform:translate(-50%,0)}
+@media(max-width:600px){.edit-booking-card{padding:18px 14px}.edit-booking-grid{grid-template-columns:1fr}.edit-booking-fee{grid-template-columns:1fr}.edit-booking-actions{flex-direction:column}.edit-booking-actions button{width:100%}}
