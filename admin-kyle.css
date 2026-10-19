@@ -297,3 +297,20 @@
 .list-toggle-row{display:flex;justify-content:center;margin-top:14px}
 .list-toggle-row .ghost{min-width:128px}
 @media(max-width:640px){.list-toggle-row .ghost{width:100%}}
+/* Coach schedule: Pickyla-style single/multiple hour blocking (admin only). */
+.block-mode-toggle{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:17px 0 13px}
+.block-mode-toggle button{border:1px solid #383838;border-radius:11px;background:#181818;color:#ccc;padding:12px 14px;min-height:46px;font-size:12px;font-weight:900;cursor:pointer;transition:background .15s,border-color .15s}
+.block-mode-toggle button.active,.block-mode-toggle button[aria-pressed="true"]{background:#ffd600;color:#111;border-color:#ffd600}
+.block-mode-toggle button:not(.active):hover{border-color:#ffd600;color:#ffd600}
+.block-mode-help{margin:0 0 12px;color:#b1b1b1;font-size:12px;line-height:1.5}
+#scheduleSlots .slot.block-range-selected,
+#scheduleSlots .slot.block-range-selected:hover{background:#4a3b0a!important;color:#fff8d1!important;border-color:#ffd600!important;box-shadow:inset 0 0 0 2px #ffd600}
+#scheduleSlots .slot.block-range-selected .slot-status{color:#ffe66a!important}
+#scheduleSlots .slot.block-range-start{outline:2px solid #fff1ac;outline-offset:2px}
+.multi-block-actions{position:sticky;bottom:12px;z-index:12;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 15px;margin-top:13px;border:1px solid #5b4a13;border-radius:13px;background:rgba(18,18,18,.98);box-shadow:0 10px 24px rgba(0,0,0,.35)}
+.multi-block-actions[hidden]{display:none!important}
+.multi-block-actions strong{font-size:12px;font-weight:800;line-height:1.5;color:#fff2bb}
+.multi-block-actions .multi-block-buttons{display:flex;gap:8px;flex-shrink:0}
+.multi-block-actions button{min-height:42px;border-radius:10px;font-size:11px}
+.multi-block-actions button:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:690px){.multi-block-actions{align-items:stretch;flex-direction:column}.multi-block-actions .multi-block-buttons{display:grid;grid-template-columns:1fr 1fr}.block-mode-toggle button{font-size:11px;padding:12px 8px}}
