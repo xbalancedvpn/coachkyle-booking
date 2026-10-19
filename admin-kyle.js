@@ -654,91 +654,224 @@ function wireManualBooking(){
 wireManualBooking();
 
 async function cancelBooking(b){if(!confirm(`Cancel booking for ${b.client_name}?`))return;const {error}=await db.from('bookings').update({status:'cancelled',session_status:'cancelled',cancelled_at:new Date().toISOString()}).eq('id',b.id);if(error)return toast(error.message);await db.from('schedule_slots').delete().eq('booking_id',b.id);toast('Booking cancelled and hours reopened.');await loadAll();window.dispatchEvent(new CustomEvent('coach:data-changed',{detail:{type:'booking-cancelled',bookingId:b.id}}))}
-let pendingBlockSlot=null;
-function adminBlockReason(note){
-  const s=String(note||'').trim();
-  if(!s)return 'Coach Unavailable';
-  if(s.startsWith('PUBLIC:'))return s.slice(7).trim()||'Coach Unavailable';
-  if(s.startsWith('PRIVATE:'))return s.slice(8).trim()||'Coach Unavailable';
-  return s;
-}
-function blockReasonKey(reason){
-  const s=String(reason||'').trim().toLowerCase();
-  if(s==='training')return 'training';
-  if(s==='tournament')return 'tournament';
-  if(s==='personal schedule')return 'personal';
-  if(s==='rest day')return 'rest';
-  if(s==='coach unavailable')return 'unavailable';
-  return 'other';
-}
-async function loadSchedule(){
-  const d=$('#scheduleDate').value||ymd(new Date());
-  const {data,error}=await db.from('schedule_slots').select('*').eq('slot_date',d).order('start_hour');
-  if(error)return $('#scheduleSlots').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
-  const map=new Map((data||[]).map(r=>[Number(r.start_hour),r]));
-  if(d===ymd(new Date()))$('#metricBlocked').textContent=(data||[]).filter(r=>r.status==='unavailable').length;
-  let html='';
-  for(let h=8;h<22;h++){
-    const r=map.get(h),st=r?.status||'available';
-    const reason=st==='unavailable'?adminBlockReason(r?.notes):'';
-    const reasonKey=st==='unavailable'?blockReasonKey(reason):'';
-    const detail=st==='unavailable'?reason:st==='booked'?'Booked':'Available';
-    const badgeClass=st==='unavailable'?` block-reason-badge reason-${reasonKey}`:'';
-    const extraClass=st==='unavailable'?` block-${reasonKey}`:'';
-    html+=`<button class="slot ${st}${extraClass}" data-hour="${h}" ${st==='booked'?'disabled':''}><span class="slot-time">${shortHour(h)} to ${shortHour(h+1)}</span><small class="slot-status${badgeClass}">${esc(detail)}</small></button>`;
+let pendingBlockSlot = null;
+  let blockMode = 'single';
+  let blockRangeStart = null;
+  let blockRangeEnd = null;
+  let blockScheduleDate = '';
+  let blockScheduleRows = new Map();
+  let blockScheduleRequest = 0;
+  let blockSaving = false;
+
+  function adminBlockReason(note) {
+    const s = String(note || '').trim();
+    if (!s) return 'Coach Unavailable';
+    if (s.startsWith('PUBLIC:')) return s.slice(7).trim() || 'Coach Unavailable';
+    if (s.startsWith('PRIVATE:')) return s.slice(8).trim() || 'Coach Unavailable';
+    return s;
   }
-  const scheduleRoot=$('#scheduleSlots');
-  scheduleRoot.innerHTML=html;
-  scheduleRoot.onclick=e=>{
-    const btn=e.target.closest('.slot:not([disabled])');
-    if(!btn||!scheduleRoot.contains(btn))return;
-    toggleSlot(d,Number(btn.dataset.hour),map.get(Number(btn.dataset.hour)));
-  };
-}
-function openBlockReason(date,h){
-  pendingBlockSlot={date:date,h:h};
-  $('#blockReasonTime').textContent=`${date} • ${hour(h)}–${hour(h+1)}`;
-  $('#blockReason').value='Coach Unavailable';
-  $('#blockReasonOther').value='';
-  $('#blockReasonOtherWrap').style.display='none';
-  $('#blockReasonPublic').checked=true;
-  $('#blockReasonDialog').showModal();
-}
-async function saveBlockReason(){
-  if(!pendingBlockSlot)return;
-  let reason=$('#blockReason').value;
-  if(reason==='Other')reason=$('#blockReasonOther').value.trim()||'Coach Unavailable';
-  const note=($('#blockReasonPublic').checked?'PUBLIC:':'PRIVATE:')+reason;
-  const row={
-    slot_date:pendingBlockSlot.date,
-    start_hour:pendingBlockSlot.h,
-    status:'unavailable',
-    notes:note
-  };
-  const {error}=await db.from('schedule_slots').upsert(row,{onConflict:'slot_date,start_hour'});
-  if(error)return toast(error.message);
-  const blockedHour=pendingBlockSlot.h;
-  $('#blockReasonDialog').close();
-  pendingBlockSlot=null;
-  toast(`${hour(blockedHour)} blocked • ${reason}.`);
-  await loadSchedule();
-}
-async function toggleSlot(date,h,row){
-  if(row?.status==='unavailable'){
-    const {error}=await db.from('schedule_slots').delete().eq('id',row.id);
-    if(error)return toast(error.message);
-    toast(`${hour(h)} reopened.`);
-    await loadSchedule();
-  }else{
-    openBlockReason(date,h);
+  function blockReasonKey(reason) {
+    const s = String(reason || '').trim().toLowerCase();
+    if (s === 'training') return 'training';
+    if (s === 'tournament') return 'tournament';
+    if (s === 'personal schedule') return 'personal';
+    if (s === 'rest day') return 'rest';
+    if (s === 'coach unavailable') return 'unavailable';
+    return 'other';
   }
-}
-$('#blockReason')?.addEventListener('change',()=>{
-  $('#blockReasonOtherWrap').style.display=$('#blockReason').value==='Other'?'grid':'none';
-});
-$('#closeBlockReason')?.addEventListener('click',()=>$('#blockReasonDialog').close());
-$('#cancelBlockReason')?.addEventListener('click',()=>$('#blockReasonDialog').close());
-$('#saveBlockReason')?.addEventListener('click',saveBlockReason);
+  function isBlockHourAvailable(h) {
+    const row = blockScheduleRows.get(h);
+    return (!row || row.status === 'available') && !row?.booking_id;
+  }
+  function blockSelectedHours() {
+    if (blockRangeStart === null || blockRangeEnd === null) return [];
+    const start = Math.min(blockRangeStart, blockRangeEnd);
+    const end = Math.max(blockRangeStart, blockRangeEnd);
+    const hours = [];
+    for (let h = start; h <= end; h++) {
+      if (!isBlockHourAvailable(h)) return [];
+      hours.push(h);
+    }
+    return hours;
+  }
+  function clearBlockSelection() {
+    blockRangeStart = null;
+    blockRangeEnd = null;
+    renderBlockSelection();
+  }
+  function renderBlockSelection() {
+    const bar = $('#multiBlockActions'), summary = $('#multiBlockSummary');
+    const selected = blockSelectedHours();
+    if (bar) bar.hidden = blockMode !== 'multiple';
+    document.querySelectorAll('#blockModeToggle [data-block-mode]').forEach(btn => {
+      const active = btn.dataset.blockMode === blockMode;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
+    if (summary) {
+      if (blockRangeStart === null) summary.textContent = 'Tap a start hour to select a range.';
+      else if (blockRangeEnd === null) summary.textContent = `Start: ${hour(blockRangeStart)} • Tap an end hour.`;
+      else if (selected.length) summary.textContent = `Selected: ${hour(Math.min(blockRangeStart, blockRangeEnd))} – ${hour(Math.max(blockRangeStart, blockRangeEnd) + 1)} • ${selected.length} hour${selected.length === 1 ? '' : 's'}`;
+      else summary.textContent = 'A booked or blocked hour crosses this range. Choose another range.';
+    }
+    const confirmBtn = $('#blockSelectedHours');
+    if (confirmBtn) confirmBtn.disabled = blockMode !== 'multiple' || selected.length === 0 || blockSaving;
+    const shown = blockMode === 'multiple'
+      ? blockRangeEnd === null ? (blockRangeStart === null ? [] : [blockRangeStart]) : selected
+      : [];
+    document.querySelectorAll('#scheduleSlots .slot[data-hour]').forEach(btn => {
+      const h = Number(btn.dataset.hour), selectedHere = shown.includes(h);
+      btn.classList.toggle('block-range-selected', selectedHere);
+      btn.classList.toggle('block-range-start', selectedHere && h === blockRangeStart);
+      btn.setAttribute('aria-pressed', String(selectedHere));
+    });
+  }
+  function chooseBlockRangeHour(h) {
+    if (!isBlockHourAvailable(h)) return;
+    if (blockRangeStart === null || blockRangeEnd !== null) {
+      blockRangeStart = h;
+      blockRangeEnd = null;
+    } else {
+      const start = Math.min(blockRangeStart, h), end = Math.max(blockRangeStart, h);
+      let valid = true;
+      for (let x = start; x <= end; x++) {
+        if (!isBlockHourAvailable(x)) { valid = false; break; }
+      }
+      if (valid) blockRangeEnd = h;
+      else {
+        blockRangeStart = h;
+        blockRangeEnd = null;
+        toast('A booked or blocked hour is in between. Start a new range.');
+      }
+    }
+    renderBlockSelection();
+  }
+  async function loadSchedule() {
+    const d = $('#scheduleDate').value || ymd(new Date());
+    const request = ++blockScheduleRequest;
+    if (blockScheduleDate !== d) {
+      blockScheduleDate = d;
+      blockRangeStart = null;
+      blockRangeEnd = null;
+    }
+    const {data, error} = await db.from('schedule_slots').select('*').eq('slot_date', d).order('start_hour');
+    if (request !== blockScheduleRequest || d !== $('#scheduleDate').value) return;
+    if (error) {
+      $('#scheduleSlots').innerHTML = `<div class="empty">${esc(error.message)}</div>`;
+      renderBlockSelection();
+      return;
+    }
+    blockScheduleRows = new Map((data || []).map(r => [Number(r.start_hour), r]));
+    if (d === ymd(new Date())) $('#metricBlocked').textContent = (data || []).filter(r => r.status === 'unavailable').length;
+    let html = '';
+    for (let h = 8; h < 22; h++) {
+      const r = blockScheduleRows.get(h), st = r?.status || 'available';
+      const reason = st === 'unavailable' ? adminBlockReason(r?.notes) : '';
+      const reasonKey = st === 'unavailable' ? blockReasonKey(reason) : '';
+      const detail = st === 'unavailable' ? reason : st === 'booked' ? 'Booked' : 'Available';
+      const badgeClass = st === 'unavailable' ? ` block-reason-badge reason-${reasonKey}` : '';
+      const extraClass = st === 'unavailable' ? ` block-${reasonKey}` : '';
+      html += `<button type="button" class="slot ${st}${extraClass}" data-hour="${h}" ${st === 'booked' ? 'disabled' : ''}><span class="slot-time">${shortHour(h)} to ${shortHour(h + 1)}</span><small class="slot-status${badgeClass}">${esc(detail)}</small></button>`;
+    }
+    const root = $('#scheduleSlots');
+    root.innerHTML = html;
+    root.onclick = e => {
+      const btn = e.target.closest('.slot:not([disabled])');
+      if (!btn || !root.contains(btn)) return;
+      const h = Number(btn.dataset.hour), row = blockScheduleRows.get(h);
+      if (row?.status === 'unavailable') toggleSlot(d, h, row);
+      else if (blockMode === 'multiple') chooseBlockRangeHour(h);
+      else openBlockReason(d, [h]);
+    };
+    renderBlockSelection();
+  }
+  function openBlockReason(date, selected) {
+    const hours = Array.isArray(selected) ? [...selected] : [selected];
+    if (!hours.length) return;
+    pendingBlockSlot = {date, hours};
+    const first = Math.min(...hours), last = Math.max(...hours);
+    const isMulti = blockMode === 'multiple' || hours.length > 1;
+    $('#blockReasonTitle').textContent = isMulti ? 'Block Selected Hours' : 'Block This Hour';
+    $('#blockReasonTime').textContent = `${date} • ${hour(first)} – ${hour(last + 1)}${isMulti ? ` • ${hours.length} hour${hours.length === 1 ? '' : 's'}` : ''}`;
+    $('#saveBlockReason').textContent = isMulti ? 'Block Selected Hours' : 'Block Hour';
+    $('#blockReason').value = 'Coach Unavailable';
+    $('#blockReasonOther').value = '';
+    $('#blockReasonOtherWrap').style.display = 'none';
+    $('#blockReasonPublic').checked = true;
+    $('#blockReasonDialog').showModal();
+  }
+  async function saveBlockReason() {
+    if (!pendingBlockSlot || blockSaving) return;
+    const {date, hours} = pendingBlockSlot;
+    if (!hours.length || !date) return;
+    let reason = $('#blockReason').value;
+    if (reason === 'Other') reason = $('#blockReasonOther').value.trim() || 'Coach Unavailable';
+    const note = ($('#blockReasonPublic').checked ? 'PUBLIC:' : 'PRIVATE:') + reason;
+    const btn = $('#saveBlockReason');
+    blockSaving = true;
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    renderBlockSelection();
+    try {
+      // Re-check the entire range immediately before writing; never knowingly overwrite bookings.
+      const {data:latest, error:checkError} = await db.from('schedule_slots')
+        .select('start_hour,status,booking_id').eq('slot_date', date).in('start_hour', hours);
+      if (checkError) throw checkError;
+      if ((latest || []).some(r => r.status !== 'available' || r.booking_id)) {
+        throw new Error('The schedule changed: at least one hour is already booked or blocked. Nothing was saved. Please select again.');
+      }
+      const payload = hours.map(h => ({
+        slot_date: date, start_hour: h, status: 'unavailable', notes: note,
+        client_name: null, contact: null, coaching_type: null, rate: null, booking_id: null
+      }));
+      const {error} = await db.from('schedule_slots').upsert(payload, {onConflict: 'slot_date,start_hour'});
+      if (error) throw error;
+      $('#blockReasonDialog').close();
+      pendingBlockSlot = null;
+      clearBlockSelection();
+      toast(`${hours.length} hour${hours.length === 1 ? '' : 's'} blocked • ${reason}.`);
+      await loadSchedule();
+      window.dispatchEvent(new CustomEvent('coach:data-changed', {detail: {type: 'schedule-blocked', date, hours}}));
+    } catch (err) {
+      toast(err.message || 'Unable to block the selected hours.');
+      await loadSchedule();
+    } finally {
+      blockSaving = false;
+      btn.disabled = false;
+      btn.textContent = 'Block Hour';
+      renderBlockSelection();
+    }
+  }
+  async function toggleSlot(date, h, row) {
+    if (row?.status === 'unavailable') {
+      if (blockMode === 'multiple' && !confirm(`Reopen ${hour(h)} – ${hour(h + 1)}?`)) return;
+      const {error} = await db.from('schedule_slots').delete().eq('id', row.id);
+      if (error) return toast(error.message);
+      toast(`${hour(h)} reopened.`);
+      clearBlockSelection();
+      await loadSchedule();
+      window.dispatchEvent(new CustomEvent('coach:data-changed', {detail: {type: 'schedule-reopened', date, hours: [h]}}));
+    } else if (blockMode === 'multiple') chooseBlockRangeHour(h);
+    else openBlockReason(date, [h]);
+  }
+  $('#blockModeToggle')?.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-block-mode]');
+    if (!btn) return;
+    blockMode = btn.dataset.blockMode;
+    clearBlockSelection();
+  });
+  $('#clearBlockSelection')?.addEventListener('click', clearBlockSelection);
+  $('#blockSelectedHours')?.addEventListener('click', () => {
+    const hours = blockSelectedHours();
+    if (hours.length) openBlockReason($('#scheduleDate').value, hours);
+  });
+  $('#scheduleDate')?.addEventListener('change', clearBlockSelection);
+  $('#blockReason')?.addEventListener('change', () => {
+    $('#blockReasonOtherWrap').style.display = $('#blockReason').value === 'Other' ? 'grid' : 'none';
+  });
+  $('#closeBlockReason')?.addEventListener('click', () => $('#blockReasonDialog').close());
+  $('#cancelBlockReason')?.addEventListener('click', () => $('#blockReasonDialog').close());
+  $('#saveBlockReason')?.addEventListener('click', saveBlockReason);
 async function loadClients(){const {data,error}=await db.from('clients').select('*').eq('is_active',true).order('full_name').limit(300);if(error){$('#clients').innerHTML=`<div class="empty">${esc(error.message)}</div>`;return}clientCache=data||[];$('#metricClients').textContent=clientCache.length;renderClientList()}
 function openAddClientDialog(){const d=$('#addClientDialog');if(!d)return;$('#manualClientName').value='';$('#manualClientContact').value='';$('#manualClientNote').value='';d.showModal()}
 function closeAddClientDialog(){const d=$('#addClientDialog');if(d?.open)d.close()}
